@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Earned">
+<meta name="theme-color" content="#0e131b">
+<title>Earned</title>
+<style>
+:root{
+  --bg:#0e131b;
+  --panel:#161f2b;
+  --panel-2:#1c2733;
+  --line:#27343f;
+  --amber:#ffb545;
+  --amber-dim:#8a6530;
+  --red:#e2604a;
+  --ink:#e9edf3;
+  --muted:#8894a6;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+  -webkit-font-smoothing:antialiased;overscroll-behavior-y:contain}
+body{
+  padding:calc(env(safe-area-inset-top) + 18px) calc(env(safe-area-inset-right) + 16px)
+          calc(env(safe-area-inset-bottom) + 28px) calc(env(safe-area-inset-left) + 16px);
+  max-width:520px;margin:0 auto;
+}
+.hidden{display:none !important}
+.eyebrow{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);
+  font-weight:600;margin:0 0 2px}
+
+/* ---- setup ---- */
+#setup h1{font-family:var(--mono);font-size:30px;font-weight:600;letter-spacing:-.02em;
+  margin:6px 0 10px;color:var(--amber)}
+#setup .lede{font-size:15px;line-height:1.5;color:var(--ink);margin:0 0 30px}
+#setup .lede b{color:var(--amber);font-weight:600}
+
+/* ---- the meter ---- */
+.meter{padding:22px 0 0;text-align:center;position:relative}
+.odo{display:flex;justify-content:center;align-items:flex-start;
+  font-family:var(--mono);font-size:clamp(4.2rem,23vw,6.6rem);font-weight:600;
+  line-height:1;letter-spacing:-.02em;color:var(--amber);
+  text-shadow:0 0 28px rgba(255,181,69,.22);height:1em;overflow:hidden}
+.odo.debt{color:var(--red);text-shadow:0 0 28px rgba(226,96,74,.22)}
+.reel{height:1em;overflow:hidden;display:block}
+.strip{display:block;transition:transform .55s cubic-bezier(.22,.9,.22,1)}
+.strip span{display:block;height:1em;line-height:1}
+.sign{display:block;height:1em;line-height:1}
+@media (prefers-reduced-motion: reduce){.strip{transition:none}}
+
+.tickrow{display:flex;align-items:center;gap:10px;margin:16px 4px 0}
+.tick{flex:1;height:3px;background:var(--line);border-radius:99px;overflow:hidden}
+.tick i{display:block;height:100%;background:var(--amber);border-radius:99px;
+  transform-origin:left;transition:transform .95s linear}
+.next{font-family:var(--mono);font-size:12px;color:var(--muted);
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* ---- readouts ---- */
+.readouts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--line);
+  border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:28px}
+.readout{background:var(--panel);padding:11px 8px;text-align:center}
+.readout b{display:block;font-family:var(--mono);font-size:17px;font-weight:600;
+  font-variant-numeric:tabular-nums;color:var(--ink)}
+.readout span{display:block;font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);margin-top:3px}
+.rule{font-size:13px;line-height:1.5;color:var(--ink);text-align:center;margin:14px 6px 0}
+.readouts + .caption{font-size:11px;color:var(--muted);text-align:center;margin:9px 0 0}
+
+/* ---- spend ---- */
+h2{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);
+  font-weight:600;margin:0 0 10px}
+.spend{display:flex;gap:8px;align-items:center}
+input[type=text],select{
+  width:100%;font-size:17px;font-family:inherit;color:var(--ink);background:var(--panel);
+  border:1px solid var(--line);border-radius:11px;padding:13px 14px;appearance:none}
+input:focus,select:focus{outline:none;border-color:var(--amber-dim)}
+input::placeholder{color:#5d6878}
+#amount,#suTotal,#suStart{font-family:var(--mono);font-variant-numeric:tabular-nums}
+#amount{flex:0 0 118px}
+#label{flex:1;min-width:0}
+button{font-family:inherit;font-size:16px;font-weight:600;color:var(--bg);
+  background:var(--amber);border:0;border-radius:11px;padding:13px 18px;cursor:pointer}
+button:active{opacity:.75}
+button.ghost{background:transparent;color:var(--muted);border:1px solid var(--line);font-weight:500}
+button.danger{width:100%;margin-top:14px;background:transparent;color:var(--red);
+  border:1px solid var(--red);font-weight:600}
+#sub,#startBtn{width:100%;margin-top:8px}
+#startBtn{margin-top:26px;padding:15px}
+.hint{font-size:12px;color:var(--muted);margin:9px 2px 0;line-height:1.45}
+
+/* ---- log ---- */
+.log{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:12px;
+  overflow:hidden}
+details > .log{margin-top:12px}
+.log li{display:flex;align-items:center;gap:12px;background:var(--panel);
+  padding:11px 6px 11px 14px;border-bottom:1px solid var(--line)}
+.log li:last-child{border-bottom:0}
+.log li.day{display:block;background:var(--panel-2);padding:7px 14px;
+  font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.log time{font-family:var(--mono);font-size:12px;color:var(--muted);flex:0 0 62px;
+  font-variant-numeric:tabular-nums}
+.log .amt{flex:0 0 66px;text-align:right;font-family:var(--mono);font-size:15px;
+  font-variant-numeric:tabular-nums;color:var(--red)}
+.log .what{flex:1;min-width:0;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.log .what em{font-style:italic;color:var(--muted);font-size:14px}
+.log .amt.plus{color:var(--amber)}
+.log .del{background:none;border:0;color:#4d5766;font-size:20px;padding:4px 12px;line-height:1}
+.empty{background:var(--panel);padding:16px 14px;font-size:14px;color:var(--muted)}
+
+/* ---- collapsibles ---- */
+section,details{margin-top:26px;border-top:1px solid var(--line);padding-top:16px}
+summary{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);
+  font-weight:600;cursor:pointer;list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::after{content:" +";font-family:var(--mono)}
+details[open] summary::after{content:" \2212"}
+.field{margin-top:16px}
+.field label{display:block;font-size:13px;color:var(--ink);margin-bottom:6px;font-weight:500}
+.field .note,#resetWrap .note{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.45}
+#resetWrap .note{margin:10px 2px 0}
+.actions{display:flex;gap:8px;margin-top:20px}
+.actions button{flex:1}
+
+#toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 24px);
+  transform:translate(-50%,14px);background:var(--panel-2);color:var(--ink);
+  border:1px solid var(--line);border-radius:99px;padding:10px 20px;font-size:14px;
+  opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:9}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+
+<!-- ============ SCREEN 1: SETUP ============ -->
+<div id="setup" class="hidden">
+  <p class="eyebrow">Set up</p>
+  <h1>Calorie Earner</h1>
+  <p class="lede">Your calorie balance climbs in real time, all day and all night. Before you eat or drink
+    anything, check the number and <b>consume no more than it says</b>. Every calorie gets
+    earned before it gets spent.</p>
+
+  <div class="field">
+    <label for="suTotal">Calories per day</label>
+    <input id="suTotal" type="text" inputmode="numeric" value="2000">
+    <p class="note">How fast the balance climbs. Take what you'd normally eat to hold your weight
+      and subtract the deficit you want &mdash; 500 a day below maintenance is the usual place to start.</p>
+  </div>
+
+  <div class="field">
+    <label for="suStart">Starting balance</label>
+    <input id="suStart" type="text" inputmode="text" value="0">
+    <p class="note">You'll open with everything you'd have earned so far today already banked.
+      This is applied on top of that &mdash; leave it at 0 for a clean start, or enter a negative
+      number to cover what you've already eaten today.</p>
+  </div>
+
+  <button id="startBtn">Start earning</button>
+</div>
+
+<!-- ============ SCREEN 2: THE METER ============ -->
+<div id="main" class="hidden">
+  <p class="eyebrow">Banked right now</p>
+
+  <div class="meter">
+    <div class="odo" id="odo"></div>
+    <div class="tickrow">
+      <div class="tick" id="tick"><i></i></div>
+      <div class="next" id="next">&mdash;</div>
+    </div>
+  </div>
+
+  <p class="rule">Every calorie gets earned before it gets spent. Consume no more than the
+    number shows, then log it.</p>
+
+  <div class="readouts">
+    <div class="readout"><b id="rEarned">0</b><span>Earned</span></div>
+    <div class="readout"><b id="rEaten">0</b><span>Consumed</span></div>
+    <div class="readout"><b id="rLeft">0</b><span>Still coming</span></div>
+  </div>
+  <p class="caption">All three cover today only, midnight to midnight. The balance above never resets.</p>
+
+  <section>
+    <h2>Consume</h2>
+    <div class="spend">
+      <input id="amount" type="text" inputmode="decimal" placeholder="0" aria-label="Calories">
+      <input id="label" type="text" placeholder="What was it? (optional)" aria-label="What was it">
+    </div>
+    <button id="sub">Subtract</button>
+    <p class="hint">Enter a negative number to put calories back.</p>
+  </section>
+
+  <details id="logWrap" open>
+    <summary id="logHead">Log</summary>
+    <ul class="log" id="log"></ul>
+    <p class="note">Entries drop off 48 hours after they're logged. An entry dropping off never
+      changes your balance. Removing an entry with &times; does change your balance, since that's a
+      correction rather than time passing.</p>
+  </details>
+
+  <details id="setWrap">
+    <summary>Settings</summary>
+    <div class="field">
+      <label for="sTotal">Calories per day</label>
+      <input id="sTotal" type="text" inputmode="numeric">
+      <p class="note">Changing this only changes the pace from this moment on. Calories you've
+        already earned stay exactly where they are. Your starting calories per day was
+        <span id="sOriginal">2,000</span>.</p>
+    </div>
+    <button id="save">Save settings</button>
+  </details>
+  <details id="resetWrap">
+    <summary>Reset app</summary>
+    <button id="clear" class="danger">Reset app</button>
+    <p class="note">Throws away your balance. Clears the log. Resets the app back to the startup
+      screen. This can't be undone.</p>
+  </details>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+var KEY   = "calorie-earner-v2";
+var DAY   = 86400000;
+var PRUNE = 2 * DAY;            /* entries drop off 48h after they were logged */
+
+var DEFAULTS = { dailyTotal: 2000 };
+
+/* ---------------- storage ---------------- */
+var mem = null;
+function saveRaw(s){
+  mem = s;
+  try{ localStorage.setItem(KEY, s); return; }catch(e){}
+  try{ if(window.storage) window.storage.set(KEY, s, false); }catch(e){}
+}
+function loadAsync(cb){
+  try{ var v = localStorage.getItem(KEY); if(v != null) return cb(v); }catch(e){}
+  if(mem != null) return cb(mem);
+  try{
+    if(window.storage){
+      window.storage.get(KEY, false).then(
+        function(r){ cb(r && r.value ? r.value : null); },
+        function(){ cb(null); });
+      return;
+    }
+  }catch(e){}
+  cb(null);
+}
+
+/* ---------------- state ----------------
+   balance = startBalance + earned(now) - consumedTotal
+
+   earned() accrues in segments so a rate change is never retroactive.
+   consumedTotal only ever moves when you log or delete an entry --
+   pruning the log leaves it untouched.                                  */
+var S = {
+  setupDone: false,
+  dailyTotal: DEFAULTS.dailyTotal,
+  setupTotal: DEFAULTS.dailyTotal,   /* the rate chosen on the setup screen */
+  startBalance: 0,
+  earnedLocked: 0,     /* earned before the current segment began */
+  segStart: 0,         /* when the current rate started */
+  consumedTotal: 0,    /* every calorie ever logged; never pruned */
+  entries: [],         /* rolling 48h window, for display only */
+  dayMarkT: 0,         /* the midnight we last observed */
+  dayMarkEarned: 0     /* earned() as of that midnight */
+};
+
+function ratePerMs(){ return S.dailyTotal / DAY; }
+function earnedAt(t){
+  var d = t - S.segStart;
+  if(d < 0) d = 0;
+  return S.earnedLocked + ratePerMs() * d;
+}
+function balanceAt(t){ return S.startBalance + earnedAt(t) - S.consumedTotal; }
+
+/* Freeze what's been earned, start a new segment. The past is sealed. */
+function reanchor(now){
+  S.earnedLocked = earnedAt(now);
+  S.segStart = now;
+}
+
+function midnightOf(t){ var d = new Date(t); d.setHours(0,0,0,0); return d.getTime(); }
+function nextMidnight(t){ var d = new Date(t); d.setHours(0,0,0,0); d.setDate(d.getDate()+1); return d.getTime(); }
+
+/* Today's reference figures. Purely informational -- nothing here feeds the balance. */
+function markDay(now){
+  var mid = midnightOf(now);
+  if(S.dayMarkT !== mid){
+    S.dayMarkEarned = earnedAt(mid);
+    S.dayMarkT = mid;
+    return true;
+  }
+  return false;
+}
+function earnedToday(now){ return earnedAt(now) - S.dayMarkEarned; }
+function consumedToday(now){
+  var mid = midnightOf(now), n = 0;
+  for(var i = 0; i < S.entries.length; i++) if(S.entries[i].t >= mid) n += S.entries[i].amt;
+  return n;
+}
+function stillComingToday(now){ return ratePerMs() * (nextMidnight(now) - now); }
+
+function prune(now){
+  var keep = [], dropped = false;
+  for(var i = 0; i < S.entries.length; i++){
+    if(now - S.entries[i].t < PRUNE) keep.push(S.entries[i]);
+    else dropped = true;
+  }
+  if(dropped) S.entries = keep;      /* consumedTotal deliberately untouched */
+  return dropped;
+}
+
+function persist(){ saveRaw(JSON.stringify(S)); }
+
+/* ---------------- odometer ---------------- */
+var odo = document.getElementById("odo");
+var slots = [], lastSign = null;
+
+function setDigits(str){
+  var neg = str.charAt(0) === "-";
+  var digits = neg ? str.slice(1) : str;
+  if(slots.length !== digits.length || lastSign !== neg){
+    odo.innerHTML = ""; slots = [];
+    if(neg){
+      var sg = document.createElement("span");
+      sg.className = "sign"; sg.textContent = "\u2212";
+      odo.appendChild(sg);
+    }
+    for(var i = 0; i < digits.length; i++){
+      var reel = document.createElement("span"); reel.className = "reel";
+      var strip = document.createElement("span"); strip.className = "strip";
+      for(var d = 0; d <= 9; d++){
+        var s = document.createElement("span"); s.textContent = d; strip.appendChild(s);
+      }
+      strip.style.transitionDelay = ((digits.length - 1 - i) * 45) + "ms";
+      reel.appendChild(strip); odo.appendChild(reel);
+      slots.push({ strip: strip, val: -1 });
+    }
+    lastSign = neg;
+  }
+  for(var j = 0; j < digits.length; j++){
+    var v = +digits.charAt(j);
+    if(slots[j].val !== v){
+      slots[j].val = v;
+      slots[j].strip.style.transform = "translateY(-" + v + "em)";
+    }
+  }
+  odo.classList.toggle("debt", neg);
+}
+
+/* ---------------- render ---------------- */
+var elTick = document.getElementById("tick");
+var elTickFill = elTick.firstElementChild;
+var elNext = document.getElementById("next");
+var elEarned = document.getElementById("rEarned");
+var elEaten = document.getElementById("rEaten");
+var elLeft = document.getElementById("rLeft");
+var elLog = document.getElementById("log");
+var elLogHead = document.getElementById("logHead");
+
+function fmt(n){ return Math.round(n).toLocaleString(); }
+function fmtDown(n){ return Math.floor(n).toLocaleString(); }
+function fmtUp(n){ return Math.ceil(n).toLocaleString(); }
+function hhmm(t){
+  var d = new Date(t), h = d.getHours(), m = d.getMinutes();
+  var ap = h >= 12 ? "PM" : "AM"; h = h % 12; if(h === 0) h = 12;
+  return h + ":" + (m < 10 ? "0" : "") + m + " " + ap;
+}
+
+function render(){
+  var now = Date.now();
+  var changed = markDay(now);
+  if(prune(now)){ changed = true; renderLog(); }
+  if(changed) persist();
+
+  var bal = balanceAt(now);
+  setDigits(String(Math.floor(bal)));
+
+  elEarned.textContent = fmtDown(earnedToday(now));
+  elEaten.textContent  = fmt(consumedToday(now));
+  elLeft.textContent   = fmtUp(stillComingToday(now));
+
+  var frac = bal - Math.floor(bal);
+  elTickFill.style.transform = "scaleX(" + frac.toFixed(4) + ")";
+  var secs = Math.ceil((1 - frac) / (ratePerMs() * 1000));
+  elNext.textContent = "+1 in " + secs + "s";
+}
+
+function dayLabel(t, now){
+  var a = midnightOf(t), today = midnightOf(now);
+  if(a === today) return "Today";
+  if(a === today - DAY || a === midnightOf(now - DAY)) return "Yesterday";
+  return new Date(t).toLocaleDateString(undefined,
+    { weekday:"short", month:"short", day:"numeric" });
+}
+function esc(s){
+  return String(s).replace(/[&<>"]/g, function(c){
+    return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c];
+  });
+}
+
+function renderLog(){
+  var now = Date.now();
+  elLogHead.textContent = "Log";
+  if(!S.entries.length){
+    elLog.innerHTML = '<li class="empty">Nothing logged yet.</li>';
+    return;
+  }
+  var sorted = S.entries.slice().sort(function(a,b){ return b.t - a.t; });
+  var html = "", lastDay = null;
+  for(var i = 0; i < sorted.length; i++){
+    var e = sorted[i], lab = dayLabel(e.t, now);
+    if(lab !== lastDay){ html += '<li class="day">' + esc(lab) + '</li>'; lastDay = lab; }
+    var plus = e.amt < 0;
+    var what = e.label ? esc(e.label) : '<em>Item not recorded</em>';
+    html += '<li><time>' + hhmm(e.t) + '</time>' +
+            '<span class="amt' + (plus ? " plus" : "") + '">' +
+            (plus ? "+" : "\u2212") + fmt(Math.abs(e.amt)) + '</span>' +
+            '<span class="what">' + what + '</span>' +
+            '<button class="del" data-id="' + e.id + '" aria-label="Remove">\u00d7</button></li>';
+  }
+  elLog.innerHTML = html;
+}
+
+var toastT;
+function toast(msg){
+  var t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastT);
+  toastT = setTimeout(function(){ t.classList.remove("show"); }, 1600);
+}
+
+/* ---------------- spending ---------------- */
+var amount = document.getElementById("amount");
+var labelIn = document.getElementById("label");
+
+function submit(){
+  var v = parseFloat(amount.value);
+  if(!isFinite(v) || v === 0){ amount.focus(); return; }
+  var now = Date.now();
+  S.entries.push({ id: "e" + now + Math.random().toString(36).slice(2,7),
+                   t: now, amt: v, label: labelIn.value.trim().slice(0,40) });
+  S.consumedTotal += v;
+  amount.value = ""; labelIn.value = "";
+  amount.blur(); labelIn.blur();
+  persist(); renderLog(); render();
+  toast(v > 0 ? fmt(v) + " subtracted" : fmt(-v) + " put back");
+}
+document.getElementById("sub").addEventListener("click", submit);
+amount.addEventListener("keydown", function(e){ if(e.key === "Enter") submit(); });
+labelIn.addEventListener("keydown", function(e){ if(e.key === "Enter") submit(); });
+
+elLog.addEventListener("click", function(e){
+  var b = e.target.closest(".del");
+  if(!b) return;
+  var id = b.dataset.id;
+  for(var i = 0; i < S.entries.length; i++){
+    if(S.entries[i].id === id){
+      S.consumedTotal -= S.entries[i].amt;   /* a correction, so the balance does move */
+      S.entries.splice(i,1);
+      break;
+    }
+  }
+  persist(); renderLog(); render();
+  toast("Removed");
+});
+
+/* ---------------- settings ---------------- */
+var sTotal = document.getElementById("sTotal");
+function fillSettings(){
+  sTotal.value = S.dailyTotal;
+  document.getElementById("sOriginal").textContent = S.setupTotal.toLocaleString();
+}
+
+function applyRate(total){
+  reanchor(Date.now());
+  S.dailyTotal = total;
+  fillSettings(); persist(); render();
+}
+document.getElementById("save").addEventListener("click", function(){
+  var t = parseFloat(sTotal.value);
+  if(!isFinite(t) || t <= 0){ toast("Calories per day must be a number"); return; }
+  applyRate(t); toast("Saved");
+});
+
+/* ---------------- setup screen ---------------- */
+var elSetup = document.getElementById("setup");
+var elMain  = document.getElementById("main");
+var suTotal = document.getElementById("suTotal");
+var suStart = document.getElementById("suStart");
+
+function showSetup(){
+  suTotal.value = S.dailyTotal || DEFAULTS.dailyTotal;
+  suStart.value = 0;
+  elSetup.classList.remove("hidden");
+  elMain.classList.add("hidden");
+}
+function showMain(){
+  elSetup.classList.add("hidden");
+  elMain.classList.remove("hidden");
+  /* Log open, the other two closed -- also after a reset, when the page never reloads. */
+  document.getElementById("logWrap").open = true;
+  document.getElementById("resetWrap").open = false;
+  document.getElementById("setWrap").open = false;
+  fillSettings(); renderLog(); render();
+}
+
+document.getElementById("startBtn").addEventListener("click", function(){
+  var t = parseFloat(suTotal.value), b = parseFloat(suStart.value);
+  if(!isFinite(t) || t <= 0){ toast("Calories per day must be a number"); suTotal.focus(); return; }
+  if(!isFinite(b)) b = 0;
+  var now = Date.now();
+  S.setupDone = true;
+  S.dailyTotal = t;
+  S.setupTotal = t;
+  S.startBalance = b;
+  S.earnedLocked = 0;
+  S.segStart = midnightOf(now);   /* credit what the day has already earned */
+  S.consumedTotal = 0;
+  S.entries = [];
+  S.dayMarkT = 0;
+  S.dayMarkEarned = 0;
+  markDay(now);
+  persist(); showMain();
+});
+
+document.getElementById("clear").addEventListener("click", function(){
+  S.setupDone = false;
+  S.startBalance = 0;
+  S.earnedLocked = 0;
+  S.segStart = Date.now();
+  S.consumedTotal = 0;
+  S.entries = [];
+  S.dayMarkT = 0;
+  S.dayMarkEarned = 0;
+  persist(); showSetup();
+});
+
+/* ---------------- boot ---------------- */
+loadAsync(function(raw){
+  if(raw){
+    try{
+      var o = JSON.parse(raw);
+      for(var k in S) if(o[k] !== undefined) S[k] = o[k];
+    }catch(e){}
+  }
+  if(!S.setupDone){ showSetup(); }
+  else{
+    if(!S.segStart) S.segStart = Date.now();
+    markDay(Date.now());
+    prune(Date.now());
+    persist();
+    showMain();
+  }
+  setInterval(function(){ if(S.setupDone) render(); }, 1000);
+  document.addEventListener("visibilitychange", function(){
+    if(!document.hidden && S.setupDone) render();
+  });
+});
+})();
+</script>
+</body>
+</html>
