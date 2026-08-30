@@ -65,6 +65,7 @@ body{
 
 .tickrow{display:flex;align-items:center;gap:10px;margin:16px 4px 0}
 .tick{flex:1;height:3px;background:var(--line);border-radius:99px;overflow:hidden}
+.tick.debt i{background:var(--red)}
 .tick i{display:block;height:100%;background:var(--amber);border-radius:99px;
   transform-origin:left;transition:transform .95s linear}
 .next{font-family:var(--mono);font-size:12px;color:var(--muted);
@@ -91,7 +92,10 @@ input[type=text],select{
 input:focus,select:focus{outline:none;border-color:var(--amber-dim)}
 input::placeholder{color:#5d6878}
 #amount,#suTotal{font-family:var(--mono);font-variant-numeric:tabular-nums}
-#amount{flex:0 0 118px}
+#amount{flex:0 0 92px}
+#sign{flex:0 0 46px;padding:12px 0;background:transparent;color:var(--amber);
+  border:1px solid var(--line);font-family:var(--mono);font-size:19px;line-height:1}
+#sign.add{border-color:var(--amber-dim)}
 #label{flex:1;min-width:0}
 button{font-family:inherit;font-size:16px;font-weight:600;color:var(--bg);
   background:var(--amber);border:0;border-radius:11px;padding:13px 18px;cursor:pointer}
@@ -213,13 +217,14 @@ details[open] summary::after{content:" \2212"}
   <section>
     <h2>Consume</h2>
     <div class="spend">
+      <button id="sign" aria-label="Subtract or add">&minus;</button>
       <input id="amount" type="text" inputmode="decimal" placeholder="0" aria-label="Calories">
       <input id="label" type="text" placeholder="What was it? (optional)" aria-label="What was it">
     </div>
     <button id="sub">Subtract</button>
     <p class="hint">Enter the number of calories for what you consumed, then press Subtract.
-      To add calories instead, enter a negative number. To fix a mistake, remove the entry with
-      &times; in the log.</p>
+      To put calories back instead, tap the &minus; to switch it to +. To fix a mistake, remove
+      the entry with &times; in the log.</p>
   </section>
 
   <details id="logWrap">
@@ -531,6 +536,8 @@ function render(){
 
   renderTimeline(now, bal);
 
+  elTick.classList.toggle("debt", bal < 0);
+
   var frac = bal - Math.floor(bal);
   elTickFill.style.transform = "scaleX(" + frac.toFixed(4) + ")";
   elNext.textContent = "+1 in " + shortInterval((1 - frac) / (ratePerMs() * 1000));
@@ -583,18 +590,37 @@ function toast(msg){
 /* ---------------- spending ---------------- */
 var amount = document.getElementById("amount");
 var labelIn = document.getElementById("label");
+var signBtn = document.getElementById("sign");
+var subBtn  = document.getElementById("sub");
+
+/* iOS's number pad has no minus key, so the sign is a button rather than
+   something you type. Always subtracting is the default. */
+var addMode = false;
+function setSign(add){
+  addMode = add;
+  signBtn.innerHTML = add ? "+" : "\u2212";
+  signBtn.classList.toggle("add", add);
+  subBtn.textContent = add ? "Add back" : "Subtract";
+}
+signBtn.addEventListener("click", function(){ setSign(!addMode); });
+setSign(false);
 
 function submit(){
-  var v = parseFloat(amount.value);
-  if(!isFinite(v) || v === 0){ amount.focus(); return; }
+  var n = Math.abs(parseFloat(amount.value));
+  if(!isFinite(n) || n === 0){ amount.focus(); return; }
+  var v = addMode ? -n : n;          /* stored positive = consumed */
   var now = Date.now();
   S.entries.push({ id: "e" + now + Math.random().toString(36).slice(2,7),
                    t: now, amt: v, label: labelIn.value.trim().slice(0,40) });
   S.consumedTotal += v;
+  clearConsumeRow();
+  persist(); renderLog(); render();
+  toast(addMode ? fmt(n) + " put back" : fmt(n) + " subtracted");
+}
+function clearConsumeRow(){
   amount.value = ""; labelIn.value = "";
   amount.blur(); labelIn.blur();
-  persist(); renderLog(); render();
-  toast(v > 0 ? fmt(v) + " subtracted" : fmt(-v) + " put back");
+  setSign(false);
 }
 document.getElementById("sub").addEventListener("click", submit);
 amount.addEventListener("keydown", function(e){ if(e.key === "Enter") submit(); });
@@ -739,6 +765,7 @@ clearBtn.addEventListener("click", function(){
   S.setupDone = false;
   S.dailyTotal = DEFAULTS.dailyTotal;
   S.setupTotal = DEFAULTS.dailyTotal;
+  clearConsumeRow();
   S.earnedLocked = 0;
   S.segStart = Date.now();
   S.consumedTotal = 0;
