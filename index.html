@@ -120,7 +120,7 @@ details > .log{margin-top:16px}
 .log .amt{flex:0 0 66px;text-align:right;font-family:var(--mono);font-size:15px;
   font-variant-numeric:tabular-nums;color:var(--red)}
 .log .what{flex:1;min-width:0;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.log .what em{font-style:italic;color:var(--muted);font-size:14px}
+.log .what em{font-style:normal;color:var(--muted);font-size:14px}
 .log .amt.plus{color:var(--amber)}
 .log .del{background:none;border:0;color:#4d5766;font-size:20px;padding:4px 12px;line-height:1}
 .empty{background:var(--panel);padding:16px 14px;font-size:14px;color:var(--ink)}
@@ -128,10 +128,13 @@ details > .log{margin-top:16px}
 /* ---- timeline ---- */
 .tl{margin-top:16px}
 .tl-times{position:relative;height:15px}
-.tl-times span{position:absolute;top:0;transform:translateX(-50%);text-align:center;
-  font-family:var(--mono);font-size:11px;font-variant-numeric:tabular-nums;
-  color:var(--muted);white-space:nowrap}
-.tl-times span.done{color:var(--amber)}
+.tl-times span{position:absolute;top:0;width:0}
+.tl-times i{position:absolute;top:0;font-style:normal;white-space:nowrap;
+  font-family:var(--mono);font-size:11px;font-variant-numeric:tabular-nums;color:var(--muted)}
+.tl-times i.h{right:3px}                      /* ends just left of the notch */
+.tl-times i.m{left:3px}                       /* starts just right of it */
+.tl-times i.one{left:0;transform:translateX(-50%)}
+.tl-times span.done i{color:var(--amber)}
 .tl-bar{position:relative;height:6px;background:var(--line);border-radius:99px;margin:7px 0 0}
 .tl-fill{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--amber);
   border-radius:99px;transition:width .95s linear}
@@ -177,8 +180,9 @@ details[open] summary::after{content:" \2212"}
     <input id="suTotal" type="text" inputmode="numeric" value="2000">
     <p class="note">How fast the balance climbs. You'll earn this many calories every 24 hours,
       one at a time, at a steady rate. Set it to the number of calories you want to consume each
-      day. You can change this later. The lowest allowed value is 1,200.</p>
+      day. You can change this later.</p>
     <p class="note" id="suRate"></p>
+    <p class="note">The lowest allowed value is 1,200.</p>
   </div>
 
   <button id="startBtn">Start earning</button>
@@ -186,7 +190,7 @@ details[open] summary::after{content:" \2212"}
 
 <!-- ============ SCREEN 2: THE METER ============ -->
 <div id="main" class="hidden">
-  <p class="eyebrow">Balance:</p>
+  <p class="eyebrow">Balance</p>
 
   <div class="meter">
     <div class="odo" id="odo"></div>
@@ -381,12 +385,19 @@ function milestoneList(){
   return out;
 }
 
-function untilPhrase(secs){
+/* Split into an hours half and a minutes half so the gap between them can sit
+   directly over the notch. Single-token times centre on the notch instead. */
+function untilParts(secs){
   var m = Math.ceil(secs / 60);
-  if(m < 1) return "<1m";
-  if(m < 60) return m + "m";
+  if(m < 1) return { one: "<1m" };
+  if(m < 60) return { one: m + "m" };
   var h = Math.floor(m / 60), r = m % 60;
-  return h + "h" + (r ? " " + r + "m" : "");
+  if(!r) return { one: h + "h" };
+  return { h: h + "h", m: r + "m" };
+}
+function timeMarkup(parts){
+  if(parts.one) return '<i class="one">' + parts.one + '</i>';
+  return '<i class="h">' + parts.h + '</i><i class="m">' + parts.m + '</i>';
 }
 
 var elTlTimes  = document.getElementById("tlTimes");
@@ -436,7 +447,8 @@ function renderTimeline(now, bal){
   var perSec = S.dailyTotal / 86400;
   for(var i = 0; i < tlItems.length; i++){
     var it = tlItems[i], done = bal >= it.at;
-    it.time.textContent = done ? "\u2713" : untilPhrase((it.at - bal) / perSec);
+    it.time.innerHTML = done ? '<i class="one">\u2713</i>'
+                             : timeMarkup(untilParts((it.at - bal) / perSec));
     it.time.classList.toggle("done", done);
     it.label.classList.toggle("done", done);
   }
@@ -725,6 +737,8 @@ clearBtn.addEventListener("click", function(){
   }
   disarmReset();
   S.setupDone = false;
+  S.dailyTotal = DEFAULTS.dailyTotal;
+  S.setupTotal = DEFAULTS.dailyTotal;
   S.earnedLocked = 0;
   S.segStart = Date.now();
   S.consumedTotal = 0;
