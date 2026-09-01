@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  CALORIE EARNER  v1.3
+  CALORIE EARNER  v1.5
 
   Disclaimer: this app is for the personal use of the author. Other use is not
   allowed. It is a work in progress, it has not been reviewed for general use,
@@ -103,14 +103,15 @@ button{font-family:inherit;font-size:16px;font-weight:600;color:var(--bg);
   background:var(--amber);border:0;border-radius:11px;padding:13px 18px;cursor:pointer}
 button:active{opacity:.75}
 button.ghost{background:transparent;color:var(--muted);border:1px solid var(--line);font-weight:500}
-button.danger{position:relative;overflow:hidden;width:100%;margin-top:16px;
-  background:transparent;color:var(--red);border:1px solid var(--red);font-weight:600;
-  touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-button.danger .fill{position:absolute;left:0;top:0;right:0;bottom:0;background:var(--red);
-  transform:scaleX(0);transform-origin:center;will-change:transform}
-button.danger .lbl{position:relative;z-index:1}
+/* The hold indicator is the button's own background rather than a child element:
+   absolutely positioned descendants of <button> are handled inconsistently across
+   browsers, and a background grows from the centre just as well. */
+button.danger{width:100%;margin-top:16px;color:var(--red);border:1px solid var(--red);
+  font-weight:600;touch-action:none;-webkit-user-select:none;user-select:none;
+  -webkit-touch-callout:none;background-color:transparent;
+  background-image:linear-gradient(var(--red),var(--red));
+  background-repeat:no-repeat;background-position:center center;background-size:0% 100%}
 button.danger.holding{color:var(--ink)}
-button.danger.holding .fill{transform:scaleX(1)}
 #sub,#startBtn,#save{width:100%}
 #sub{margin-top:8px}          /* paired with the inputs above it */
 #save{margin-top:16px}
@@ -272,10 +273,10 @@ details[open] summary::after{content:" \2212"}
   </details>
   <details id="resetWrap">
     <summary>Reset app</summary>
-    <button id="clear" class="danger"><span class="fill"></span><span class="lbl">Reset app</span></button>
+    <button id="clear" class="danger">Reset app</button>
     <p class="note">Throws away your balance. Clears the log. Resets the app back to the startup
       screen. This can't be undone.</p>
-    <p class="note" id="verLine">Version 1.3</p>
+    <p class="note" id="verLine">Version 1.5</p>
   </details>
 
 </div>
@@ -289,9 +290,9 @@ var KEY   = "calorie-earner-v2";
 var DAY   = 86400000;
 var PRUNE = 2 * DAY;            /* entries drop off 48h after they were logged */
 
-var APP_VERSION = "1.3";
+var APP_VERSION = "1.5";
 var HOLD_RESET_MS = 3000;   /* hold the armed reset button this long */
-var HOLD_DEL_MS   = 3000;   /* hold a log entry's x this long */
+var HOLD_DEL_MS   = 2000;   /* hold a log entry's x this long */
 var ARM_TIMEOUT   = 5000;   /* armed reset disarms itself after this */
 
 var DEFAULTS = { dailyTotal: 2000 };
@@ -543,6 +544,24 @@ function renderTimeline(now, bal){
   }
 }
 
+/* Press-and-release binding. Pointer Events are used where available; the mouse
+   and touch fallbacks mean the hold gestures still work if they aren't. */
+function bindPress(el, down, up){
+  if(window.PointerEvent){
+    el.addEventListener("pointerdown", down);
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", up);
+    el.addEventListener("pointerleave", up);
+  }else{
+    el.addEventListener("touchstart", down, { passive: false });
+    el.addEventListener("touchend", up);
+    el.addEventListener("touchcancel", up);
+    el.addEventListener("mousedown", down);
+    el.addEventListener("mouseup", up);
+    el.addEventListener("mouseleave", up);
+  }
+}
+
 /* ---------------- odometer ---------------- */
 var odo = document.getElementById("odo");
 var slots = [], lastSign = null;
@@ -730,19 +749,16 @@ function removeEntry(id){
   toast("Removed");
 }
 
-elLog.addEventListener("pointerdown", function(e){
+bindPress(elLog, function(e){
   var b = e.target.closest(".del");
   if(!b) return;
-  e.preventDefault();
+  if(e.cancelable) e.preventDefault();
   endDelHold();
   delBtn = b;
   b.classList.add("holding");
   var id = b.dataset.id;
   delT = setTimeout(function(){ endDelHold(); removeEntry(id); }, HOLD_DEL_MS);
-});
-["pointerup","pointercancel","pointerleave"].forEach(function(ev){
-  elLog.addEventListener(ev, endDelHold);
-});
+}, endDelHold);
 elLog.addEventListener("click", function(e){
   if(e.target.closest(".del")) e.preventDefault();
 });
@@ -848,64 +864,63 @@ document.getElementById("startBtn").addEventListener("click", function(){
 });
 
 /* Reset takes a tap to arm, then a deliberate hold. Letting go early cancels it
-   outright. The fill grows out from the centre to show how far along the hold is.
+   outright. The red fill grows out from the centre as the hold progresses.
 
-   Pointer capture keeps the gesture bound to the button, so sliding a finger off
-   the edge doesn't silently drop the events; touch-action:none stops the browser
-   claiming the gesture as a scroll and firing pointercancel mid-hold. */
-var clearBtn  = document.getElementById("clear");
-var clearLbl  = clearBtn.querySelector(".lbl");
-var clearFill = clearBtn.querySelector(".fill");
-var resetArmed = false, holding = false, armT = null, holdT = null;
+   One animation frame loop drives both the fill and the completion, measured
+   against the wall clock -- so what you see and what fires can't disagree, and a
+   dropped frame can't leave the button looking full without resetting. */
+var clearBtn = document.getElementById("clear");
+var resetArmed = false, holding = false, armT = null, holdRAF = null, holdStart = 0;
 
-function paintFill(scale, ms){
-  clearFill.style.transition = ms ? "transform " + ms + "ms linear" : "none";
-  clearFill.style.transform  = "scaleX(" + scale + ")";
-}
-function emptyFill(){
-  paintFill(0, 0);
-  void clearFill.offsetWidth;      /* flush it, so the next transition starts clean */
+function setFill(p){
+  clearBtn.style.backgroundSize = (Math.max(0, Math.min(1, p)) * 100).toFixed(2) + "% 100%";
 }
 function disarmReset(){
-  clearTimeout(armT); clearTimeout(holdT);
-  armT = holdT = null;
-  resetArmed = holding = false;
+  clearTimeout(armT); armT = null;
+  if(holdRAF){ cancelAnimationFrame(holdRAF); holdRAF = null; }
+  resetArmed = false; holding = false;
   clearBtn.classList.remove("holding");
-  emptyFill();
-  clearLbl.textContent = "Reset app";
+  setFill(0);
+  clearBtn.textContent = "Reset app";
+}
+function holdStep(){
+  if(!holding) return;
+  var p = (Date.now() - holdStart) / HOLD_RESET_MS;
+  if(p >= 1){ setFill(1); doReset(); return; }
+  setFill(p);
+  holdRAF = requestAnimationFrame(holdStep);
 }
 function startHold(){
   holding = true;
+  holdStart = Date.now();
   clearBtn.classList.add("holding");
-  emptyFill();
-  requestAnimationFrame(function(){
-    if(holding) paintFill(1, HOLD_RESET_MS);
-  });
-  holdT = setTimeout(doReset, HOLD_RESET_MS);
+  setFill(0);
+  holdRAF = requestAnimationFrame(holdStep);
 }
 function releaseHold(){
-  if(!holding) return;             /* releasing the arming tap leaves it armed */
-  disarmReset();
+  if(holding) disarmReset();      /* releasing the arming tap leaves it armed */
 }
 
 document.getElementById("resetWrap").addEventListener("toggle", disarmReset);
 clearBtn.addEventListener("click", function(e){ e.preventDefault(); });
+clearBtn.addEventListener("contextmenu", function(e){ e.preventDefault(); });
 
-clearBtn.addEventListener("pointerdown", function(e){
-  e.preventDefault();
-  try{ clearBtn.setPointerCapture(e.pointerId); }catch(err){}
+bindPress(clearBtn, function(e){
+  if(e.cancelable) e.preventDefault();
+  /* capture keeps the gesture on the button if a finger drifts off its edge */
+  if(e.pointerId !== undefined && clearBtn.setPointerCapture){
+    try{ clearBtn.setPointerCapture(e.pointerId); }catch(err){}
+  }
   if(!resetArmed){
     resetArmed = true;
-    clearLbl.textContent = "Hold to reset";
+    clearBtn.textContent = "Hold to reset";
     clearTimeout(armT);
     armT = setTimeout(disarmReset, ARM_TIMEOUT);
     return;
   }
-  clearTimeout(armT); armT = null;  /* the hold itself keeps it alive */
+  clearTimeout(armT); armT = null;   /* the hold itself keeps it alive */
   startHold();
-});
-clearBtn.addEventListener("pointerup", releaseHold);
-clearBtn.addEventListener("pointercancel", releaseHold);
+}, releaseHold);
 
 function doReset(){
   disarmReset();
