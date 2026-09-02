@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  CALORIE EARNER  v1.6
+  CALORIE EARNER  v1.7
 
   Disclaimer: this app is for the personal use of the author. Other use is not
   allowed. It is a work in progress, it has not been reviewed for general use,
@@ -92,12 +92,19 @@ input:focus,select:focus{outline:none;border-color:var(--amber-dim)}
 input::placeholder{color:#5d6878}
 #amount,#suTotal{font-family:var(--mono);font-variant-numeric:tabular-nums}
 #amount{flex:0 0 72px}          /* fits 4 digits with even padding either side */
+/* The bars are drawn rather than typed, so - and + share one exact centre and one
+   stroke weight; font metrics can't pull either off-centre. */
 #sign{position:relative;flex:0 0 26px;height:26px;padding:0;background:transparent;
-  color:var(--amber);border:1px solid var(--line);border-radius:7px;font-family:var(--mono);
-  font-size:17px;line-height:1;display:flex;align-items:center;justify-content:center}
+  color:var(--amber);border:1px solid var(--line);border-radius:7px;
+  display:flex;align-items:center;justify-content:center}
+#sign svg{width:24px;height:24px;display:block}
+#sign svg line{stroke:currentColor;stroke-width:2.4;stroke-linecap:round}
+#sign .bar-v{display:none}
 /* the badge is small but the tap target isn't */
 #sign::after{content:"";position:absolute;left:-9px;right:-9px;top:-11px;bottom:-11px}
-#sign.add{border-color:var(--amber-dim)}
+/* add mode inverts the badge, so the state reads at a glance, not just on change */
+#sign.add{background:var(--amber);color:var(--bg);border-color:var(--amber)}
+#sign.add .bar-v{display:inline}
 #label{flex:1;min-width:0}
 button{font-family:inherit;font-size:16px;font-weight:600;color:var(--bg);
   background:var(--amber);border:0;border-radius:11px;padding:13px 18px;cursor:pointer}
@@ -114,6 +121,9 @@ button.danger{width:100%;margin-top:16px;color:var(--red);border:1px solid var(-
 button.danger.holding{color:var(--ink)}
 #sub,#startBtn,#save{width:100%}
 #sub{margin-top:8px}          /* paired with the inputs above it */
+@keyframes modeflip{0%{transform:scale(1)}35%{transform:scale(1.045)}100%{transform:scale(1)}}
+#sub.flip{animation:modeflip .34s ease}
+@media (prefers-reduced-motion: reduce){#sub.flip{animation:none}}
 #save{margin-top:16px}
 #startBtn{margin-top:26px;padding:15px}
 .note,.hint{font-size:12px;color:var(--muted);line-height:1.45;margin:9px 2px 0}
@@ -122,14 +132,16 @@ button.danger.holding{color:var(--ink)}
 .log{list-style:none;margin:0;padding:0;border:1px solid var(--line);border-radius:12px;
   overflow:hidden}
 details > .log{margin-top:16px}
-.log li{display:flex;align-items:center;gap:12px;background:var(--panel);
+.log li{display:flex;align-items:center;gap:10px;background:var(--panel);
   padding:11px 6px 11px 14px;border-bottom:1px solid var(--line)}
 .log li:last-child{border-bottom:0}
 .log li.day{display:block;background:var(--panel-2);padding:7px 14px;
   font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600}
-.log time{font-family:var(--mono);font-size:12px;color:var(--ink);flex:0 0 62px;
-  font-variant-numeric:tabular-nums}
-.log .amt{flex:0 0 66px;text-align:right;font-family:var(--mono);font-size:15px;
+.log time{font-family:var(--mono);font-size:12px;color:var(--ink);flex:0 0 52px;
+  font-variant-numeric:tabular-nums;transition:color .15s}
+/* a finger covers the x while holding it, so the row's time reddens too */
+.log li.holding time{color:var(--red)}
+.log .amt{flex:0 0 52px;text-align:right;font-family:var(--mono);font-size:14px;
   font-variant-numeric:tabular-nums;color:var(--red)}
 .log .what{flex:1;min-width:0;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .log .what em{font-style:normal;color:var(--muted);font-size:14px}
@@ -232,7 +244,7 @@ details[open] summary::after{content:" \2212"}
   <details id="consumeWrap" open>
     <summary>Consume</summary>
     <div class="spend">
-      <button id="sign" aria-label="Subtract or add">&minus;</button>
+      <button id="sign" aria-label="Subtract or add"><svg viewBox="0 0 24 24" aria-hidden="true"><line class="bar-h" x1="6" y1="12" x2="18" y2="12"/><line class="bar-v" x1="12" y1="6" x2="12" y2="18"/></svg></button>
       <input id="amount" type="text" inputmode="decimal" maxlength="4" placeholder="0" aria-label="Calories">
       <input id="label" type="text" placeholder="What was it? (optional)" aria-label="What was it">
     </div>
@@ -268,6 +280,7 @@ details[open] summary::after{content:" \2212"}
       <p class="note">Changing this only changes the pace from this moment on. Calories you've
         already earned stay exactly where they are. The lowest allowed value is 1,200.
         Your starting calories per day was <span id="sOriginal">2,000</span>.</p>
+      <p class="note" id="sRate"></p>
     </div>
     <button id="save">Save settings</button>
   </details>
@@ -276,7 +289,7 @@ details[open] summary::after{content:" \2212"}
     <button id="clear" class="danger">Reset app</button>
     <p class="note">Throws away your balance. Clears the log. Resets the app back to the startup
       screen. This can't be undone.</p>
-    <p class="note" id="verLine">Version 1.6</p>
+    <p class="note" id="verLine">Version 1.7</p>
   </details>
 
 </div>
@@ -290,10 +303,10 @@ var KEY   = "calorie-earner-v2";
 var DAY   = 86400000;
 var PRUNE = 2 * DAY;            /* entries drop off 48h after they were logged */
 
-var APP_VERSION = "1.6";
+var APP_VERSION = "1.7";
 var HOLD_RESET_MS = 3000;   /* hold the armed reset button this long */
 var ARM_ROLLOVER  = 350;    /* a press held past this rolls straight into the hold */
-var HOLD_DEL_MS   = 2000;   /* hold a log entry's x this long */
+var HOLD_DEL_MS   = 1500;   /* hold a log entry's x this long */
 var ARM_TIMEOUT   = 5000;   /* armed reset disarms itself after this */
 
 var DEFAULTS = { dailyTotal: 2000 };
@@ -619,10 +632,11 @@ function shortInterval(secs){
 }
 function fmtDown(n){ return Math.floor(n).toLocaleString(); }
 function fmtUp(n){ return Math.ceil(n).toLocaleString(); }
+/* "7:07am" -- matches the timeline's clock row */
 function hhmm(t){
   var d = new Date(t), h = d.getHours(), m = d.getMinutes();
-  var ap = h >= 12 ? "PM" : "AM"; h = h % 12; if(h === 0) h = 12;
-  return h + ":" + (m < 10 ? "0" : "") + m + " " + ap;
+  var ap = h >= 12 ? "pm" : "am"; h = h % 12; if(h === 0) h = 12;
+  return h + ":" + (m < 10 ? "0" : "") + m + ap;
 }
 
 function render(){
@@ -699,13 +713,17 @@ var subBtn  = document.getElementById("sub");
 /* iOS's number pad has no minus key, so the sign is a button rather than
    something you type. Always subtracting is the default. */
 var addMode = false;
-function setSign(add){
+function setSign(add, announce){
   addMode = add;
-  signBtn.innerHTML = add ? "+" : "\u2212";
-  signBtn.classList.toggle("add", add);
+  signBtn.classList.toggle("add", add);      /* the svg swaps its own bars */
   subBtn.textContent = add ? "Add back" : "Subtract";
+  if(announce){
+    subBtn.classList.remove("flip");
+    void subBtn.offsetWidth;                 /* restart the animation */
+    subBtn.classList.add("flip");
+  }
 }
-signBtn.addEventListener("click", function(){ setSign(!addMode); });
+signBtn.addEventListener("click", function(){ setSign(!addMode, true); });
 setSign(false);
 
 function submit(){
@@ -736,7 +754,12 @@ var delT = null, delBtn = null;
 function endDelHold(){
   clearTimeout(delT);
   delT = null;
-  if(delBtn){ delBtn.classList.remove("holding"); delBtn = null; }
+  if(delBtn){
+    delBtn.classList.remove("holding");
+    var row = delBtn.closest("li");
+    if(row) row.classList.remove("holding");
+    delBtn = null;
+  }
 }
 function removeEntry(id){
   for(var i = 0; i < S.entries.length; i++){
@@ -757,6 +780,8 @@ bindPress(elLog, function(e){
   endDelHold();
   delBtn = b;
   b.classList.add("holding");
+  var row = b.closest("li");
+  if(row) row.classList.add("holding");
   var id = b.dataset.id;
   delT = setTimeout(function(){ endDelHold(); removeEntry(id); }, HOLD_DEL_MS);
 }, endDelHold);
@@ -766,9 +791,15 @@ elLog.addEventListener("click", function(e){
 
 /* ---------------- settings ---------------- */
 var sTotal = document.getElementById("sTotal");
+var sRate  = document.getElementById("sRate");
+
+function updateSettingsRate(){ sRate.innerHTML = ratePhrase(parseFloat(sTotal.value)); }
+sTotal.addEventListener("input", updateSettingsRate);
+
 function fillSettings(){
   sTotal.value = S.dailyTotal;
   document.getElementById("sOriginal").textContent = S.setupTotal.toLocaleString();
+  updateSettingsRate();
 }
 
 function applyRate(total){
