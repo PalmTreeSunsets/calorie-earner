@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  CALORIE EARNER  v1.7
+  CALORIE EARNER  v1.8
 
   Disclaimer: this app is for the personal use of the author. Other use is not
   allowed. It is a work in progress, it has not been reviewed for general use,
@@ -156,16 +156,16 @@ details > .log{margin-top:16px}
 .tl{margin-top:16px}
 .tl-clocks{position:relative;height:15px}
 .tl-clocks span{position:absolute;top:0;width:0}
-.tl-times{position:relative;height:15px}
-.tl-times span{position:absolute;top:0;width:0}
-.tl-clocks i,.tl-times i{position:absolute;top:0;font-style:normal;white-space:nowrap;
+.tl-countdown{position:relative;height:15px}
+.tl-countdown span{position:absolute;top:0;width:0}
+.tl-clocks i,.tl-countdown i{position:absolute;top:0;font-style:normal;white-space:nowrap;
   font-family:var(--mono);font-size:11px;font-variant-numeric:tabular-nums;color:var(--muted)}
-.tl-clocks i.h,.tl-times i.h{right:3px}       /* ends just left of the notch */
-.tl-clocks i.m,.tl-times i.m{left:3px}        /* starts just right of it */
-.tl-clocks i.one,.tl-times i.one{left:0;transform:translateX(-50%)}
+.tl-clocks i.h,.tl-countdown i.h{right:3px}       /* ends just left of the notch */
+.tl-clocks i.m,.tl-countdown i.m{left:3px}        /* starts just right of it */
+.tl-clocks i.one,.tl-countdown i.one{left:0;transform:translateX(-50%)}
 /* the tick straddles the clock row and the countdown row, standing in for both */
-.tl-times i.mark{left:0;transform:translateX(-50%);top:-8px;font-size:15px;line-height:1}
-.tl-times span.done i{color:var(--amber)}
+.tl-countdown i.mark{left:0;transform:translateX(-50%);top:-8px;font-size:15px;line-height:1}
+.tl-countdown span.done i{color:var(--amber)}
 .tl-bar{position:relative;height:6px;background:var(--line);border-radius:99px;margin:7px 0 0}
 .tl-fill{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--amber);
   border-radius:99px;transition:width .95s linear}
@@ -266,7 +266,7 @@ details[open] summary::after{content:" \2212"}
     <summary>Timeline</summary>
     <div class="tl">
       <div class="tl-clocks" id="tlClocks"></div>
-      <div class="tl-times" id="tlTimes"></div>
+      <div class="tl-countdown" id="tlCountdown"></div>
       <div class="tl-bar" id="tlBar"><div class="tl-fill" id="tlFill"></div></div>
       <div class="tl-labels" id="tlLabels"></div>
     </div>
@@ -289,7 +289,7 @@ details[open] summary::after{content:" \2212"}
     <button id="clear" class="danger">Reset app</button>
     <p class="note">Throws away your balance. Clears the log. Resets the app back to the startup
       screen. This can't be undone.</p>
-    <p class="note" id="verLine">Version 1.7</p>
+    <p class="note" id="verLine">Version 1.8</p>
   </details>
 
 </div>
@@ -303,7 +303,7 @@ var KEY   = "calorie-earner-v2";
 var DAY   = 86400000;
 var PRUNE = 2 * DAY;            /* entries drop off 48h after they were logged */
 
-var APP_VERSION = "1.7";
+var APP_VERSION = "1.8";
 var HOLD_RESET_MS = 3000;   /* hold the armed reset button this long */
 var ARM_ROLLOVER  = 350;    /* a press held past this rolls straight into the hold */
 var HOLD_DEL_MS   = 1500;   /* hold a log entry's x this long */
@@ -337,6 +337,23 @@ function loadAsync(cb){
   cb(null);
 }
 
+/* The five collapsible sections, and how each one starts out. A fresh install
+   and a reset both begin here; after that every section remembers how it was
+   last left, Consume included, so they all behave the same way. Consume opens
+   by default because it's the primary action and closing it costs a tap. */
+var SECTIONS = [
+  { id: "consumeWrap", open: true  },
+  { id: "timeWrap",    open: false },
+  { id: "logWrap",     open: false },
+  { id: "resetWrap",   open: false },
+  { id: "setWrap",     open: false }
+];
+function defaultOpen(){
+  var o = {}, i;
+  for(i = 0; i < SECTIONS.length; i++) o[SECTIONS[i].id] = SECTIONS[i].open;
+  return o;
+}
+
 /* ---------------- state ----------------
    balance = earned(now) - consumedTotal
 
@@ -352,7 +369,8 @@ var S = {
   consumedTotal: 0,    /* every calorie ever logged; never pruned */
   entries: [],         /* rolling 48h window, for display only */
   dayMarkT: 0,         /* the midnight we last observed */
-  dayMarkEarned: 0     /* earned() as of that midnight */
+  dayMarkEarned: 0,    /* earned() as of that midnight */
+  open: defaultOpen()  /* which sections were left open */
 };
 
 function ratePerMs(){ return S.dailyTotal / DAY; }
@@ -367,6 +385,24 @@ function balanceAt(t){ return earnedAt(t) - S.consumedTotal; }
 function reanchor(now){
   S.earnedLocked = earnedAt(now);
   S.segStart = now;
+}
+
+/* Wipe the ledger back to nothing. Both fresh starts run through here, and
+   segStart is the only thing they disagree about, so it's the argument:
+
+     setup  -- midnight today, crediting the day so far. The user is expected
+               to log what they've already consumed today, so the credit and
+               the entries they enter are two halves of one step.
+     reset  -- now, so the balance is 0. Nothing reads this before the setup
+               screen overwrites it, but a real timestamp keeps the state
+               coherent if the app is closed while sitting there. */
+function clearLedger(segStart){
+  S.earnedLocked  = 0;
+  S.segStart      = segStart;
+  S.consumedTotal = 0;
+  S.entries       = [];
+  S.dayMarkT      = 0;
+  S.dayMarkEarned = 0;
 }
 
 function midnightOf(t){ var d = new Date(t); d.setHours(0,0,0,0); return d.getTime(); }
@@ -404,60 +440,56 @@ function persist(){ saveRaw(JSON.stringify(S)); }
 
 /* ---------------- timeline ----------------
    Milestones are absolute balances, never relative to where you are now --
-   the marks stay put and only the fill moves, so there's nothing to work out. */
+   the marks stay put and only the fill moves, so there's nothing to work out.
+
+   All four are constants, including the last. The daily amount deliberately
+   isn't among them: it sets the pace, it isn't a thing you save up for, and
+   waiting to bank a whole day's worth before eating is a diet, not a default.
+   Fixed marks also mean a label can name a real quantity -- "full meal" says
+   something only because 1,200 is the same 1,200 for everyone.
+
+   The last one names permission rather than a portion, which is the honest
+   answer once you're that far ahead. "Have" rather than "eat" because drinks
+   have calories too, the same reason the section above is called Consume. */
 var MILESTONES = [
   { at: 200,  name: "snack" },
   { at: 700,  name: "meal" },
-  { at: 1200, name: "full meal" }
+  { at: 1200, name: "full meal" },
+  { at: 2000, name: "have whatever" }
 ];
 
-/* The daily mark sits at this point along the bar rather than at the end, so the
+/* The top mark sits at this point along the bar rather than at the end, so the
    bar can run to the edge and keep filling past it at the same rate. The gap also
    leaves room for the last label to centre without clipping. */
 var TL_TOP_PCT = 88;
 
-/* The daily amount is always the last mark. Anything crowding it is dropped. */
-function milestoneList(){
-  var max = S.dailyTotal, out = [];
-  for(var i = 0; i < MILESTONES.length; i++){
-    if(MILESTONES[i].at < max * 0.88) out.push(MILESTONES[i]);
-  }
-  out.push({ at: max, name: "daily amount" });
-  return out;
-}
-
-/* Split into an hours half and a minutes half so the gap between them can sit
-   directly over the notch. Single-token times centre on the notch instead. */
+/* Split into two halves so the gap between them can sit directly over the notch.
+   Single-token times centre on the notch instead. Past a day the minutes are
+   dropped: three tokens have nowhere to go, and a mark days out is an estimate
+   rather than an appointment. */
 function untilParts(secs){
   var m = Math.ceil(secs / 60);
   if(m < 1) return { one: "<1m" };
   if(m < 60) return { one: m + "m" };
   var h = Math.floor(m / 60), r = m % 60;
+  if(h >= 24){
+    var d = Math.floor(h / 24), rh = h % 24;
+    if(!rh) return { one: d + "d" };
+    return { h: d + "d", m: rh + "h" };
+  }
   if(!r) return { one: h + "h" };
   return { h: h + "h", m: r + "m" };
 }
-/* Positional qualifiers, used only when more than one mark lands on the same
-   day -- otherwise four columns could all read "Wednesday". */
-var DAY_QUALIFIERS = {
-  2: ["Early", "Late"],
-  3: ["Early", "Mid", "Late"],
-  4: ["Early", "Mid", "Late", "Very Late"]
-};
-
 function daysAway(ms, now){ return Math.round((midnightOf(ms) - midnightOf(now)) / DAY); }
 
 /* "3:30pm" for later today. Past midnight a bare time would read as today, so
-   anything landing on another day shows the day instead -- the countdown row
-   underneath still carries the precise figure. */
-function clockLabel(ms, now, share, index){
+   anything landing on another day shows the day instead. Two marks on the same
+   day both read "Wednesday"; the countdown row underneath separates them, and
+   does it absolutely rather than by position. */
+function clockLabel(ms, now){
   var d = new Date(ms), days = daysAway(ms, now);
   if(days >= 7) return d.toLocaleDateString(undefined, { month:"short", day:"numeric" });
-  if(days >= 1){
-    var q = share > 1 && DAY_QUALIFIERS[share];
-    /* abbreviated alongside a qualifier so the pair still fits the column */
-    if(q) return q[index] + " " + d.toLocaleDateString(undefined, { weekday:"short" });
-    return d.toLocaleDateString(undefined, { weekday:"long" });
-  }
+  if(days >= 1) return d.toLocaleDateString(undefined, { weekday:"long" });
   var h = d.getHours(), m = d.getMinutes();
   var ap = h >= 12 ? "pm" : "am";
   h = h % 12; if(h === 0) h = 12;
@@ -477,17 +509,18 @@ function splitMarkup(text){
          '<i class="m">' + esc(text.slice(i + 1)) + '</i>';
 }
 
-var elTlClocks = document.getElementById("tlClocks");
-var elTlTimes  = document.getElementById("tlTimes");
-var elTlBar    = document.getElementById("tlBar");
-var elTlFill   = document.getElementById("tlFill");
-var elTlLabels = document.getElementById("tlLabels");
-var tlItems = [], tlBuiltFor = 0, tlScaleMax = 1;
+var elTlClocks    = document.getElementById("tlClocks");
+var elTlCountdown = document.getElementById("tlCountdown");
+var elTlBar       = document.getElementById("tlBar");
+var elTlFill      = document.getElementById("tlFill");
+var elTlLabels    = document.getElementById("tlLabels");
+var tlItems = [], tlScaleMax = 1;
 
+/* Runs once. The marks never change, so nothing here is ever rebuilt. */
 function buildTimeline(list){
   var scaleMax = list[list.length - 1].at / (TL_TOP_PCT / 100), i;
   elTlClocks.innerHTML = "";
-  elTlTimes.innerHTML = "";
+  elTlCountdown.innerHTML = "";
   elTlLabels.innerHTML = "";
   var marks = elTlBar.querySelectorAll(".tl-mark");
   for(i = 0; i < marks.length; i++) elTlBar.removeChild(marks[i]);
@@ -502,7 +535,7 @@ function buildTimeline(list){
 
     var t = document.createElement("span");
     t.style.left = pct + "%";
-    elTlTimes.appendChild(t);
+    elTlCountdown.appendChild(t);
 
     var l = document.createElement("span");
     l.style.left = pct + "%";
@@ -513,46 +546,34 @@ function buildTimeline(list){
     m.className = "tl-mark";
     m.style.left = "calc(" + pct + "% - 1px)";
     elTlBar.appendChild(m);
-    tlItems.push({ at: list[i].at, clock: c, time: t, label: l });
+    tlItems.push({ at: list[i].at, clock: c, countdown: t, label: l });
   }
-  tlBuiltFor = list[list.length - 1].at;
   tlScaleMax = scaleMax;
 }
 
 function renderTimeline(now, bal){
-  var list = milestoneList();
-  var max = list[list.length - 1].at;
-  if(max !== tlBuiltFor || tlItems.length !== list.length) buildTimeline(list);
+  if(!tlItems.length) buildTimeline(MILESTONES);
 
-  /* Fills past the daily mark at the same rate, then stops at the end of the bar. */
+  /* Fills past the top mark at the same rate, then stops at the end of the bar. */
   elTlFill.style.width = Math.max(0, Math.min(100, bal / tlScaleMax * 100)) + "%";
 
   var perSec = S.dailyTotal / 86400, i, it, secs;
 
-  /* first pass: how many unreached marks land on each future day */
-  var etas = [], share = {}, seen = {};
+  /* ETAs first, so an unreached mark and a reached one are told apart once. */
+  var etas = [];
   for(i = 0; i < tlItems.length; i++){
     it = tlItems[i];
     if(bal >= it.at){ etas.push(null); continue; }
     secs = (it.at - bal) / perSec;
-    var ms = now + secs * 1000, d = daysAway(ms, now);
-    etas.push({ secs: secs, ms: ms, d: d });
-    if(d >= 1 && d < 7) share[d] = (share[d] || 0) + 1;
+    etas.push({ secs: secs, ms: now + secs * 1000 });
   }
 
   for(i = 0; i < tlItems.length; i++){
     it = tlItems[i];
     var e = etas[i], done = e === null;
-    it.time.innerHTML = done ? '<i class="mark">\u2713</i>' : timeMarkup(untilParts(e.secs));
-    if(done){
-      it.clock.innerHTML = "";
-    }else{
-      var n = (e.d >= 1 && e.d < 7) ? (share[e.d] || 1) : 1;
-      var idx = 0;
-      if(n > 1){ idx = seen[e.d] || 0; seen[e.d] = idx + 1; }
-      it.clock.innerHTML = splitMarkup(clockLabel(e.ms, now, n, idx));
-    }
-    it.time.classList.toggle("done", done);
+    it.countdown.innerHTML = done ? '<i class="mark">\u2713</i>' : timeMarkup(untilParts(e.secs));
+    it.clock.innerHTML = done ? "" : splitMarkup(clockLabel(e.ms, now));
+    it.countdown.classList.toggle("done", done);
     it.clock.classList.toggle("done", done);
     it.label.classList.toggle("done", done);
   }
@@ -749,7 +770,8 @@ labelIn.addEventListener("keydown", function(e){ if(e.key === "Enter") submit();
 
 /* Deleting takes a hold rather than a tap -- a stray tap while scrolling the
    log shouldn't silently change the balance. */
-var delT = null, delBtn = null;
+var delT = null, delBtn = null, delX = 0, delY = 0;
+var DEL_SLOP = 10;          /* px of finger drift before the hold is abandoned */
 
 function endDelHold(){
   clearTimeout(delT);
@@ -760,6 +782,15 @@ function endDelHold(){
     if(row) row.classList.remove("holding");
     delBtn = null;
   }
+}
+/* A finger that slides off the x cancels. The press is bound to the list rather
+   than to each button, so leaving one only fires at the edge of the whole list
+   -- without this, sliding onto the row below still deletes, and the finger is
+   nowhere near the x it started on. */
+function delMove(p){
+  if(!delBtn) return;
+  var dx = p.clientX - delX, dy = p.clientY - delY;
+  if(dx * dx + dy * dy > DEL_SLOP * DEL_SLOP) endDelHold();
 }
 function removeEntry(id){
   for(var i = 0; i < S.entries.length; i++){
@@ -779,12 +810,22 @@ bindPress(elLog, function(e){
   if(e.cancelable) e.preventDefault();
   endDelHold();
   delBtn = b;
+  delX = e.clientX; delY = e.clientY;
   b.classList.add("holding");
   var row = b.closest("li");
   if(row) row.classList.add("holding");
   var id = b.dataset.id;
   delT = setTimeout(function(){ endDelHold(); removeEntry(id); }, HOLD_DEL_MS);
 }, endDelHold);
+
+if(window.PointerEvent){
+  elLog.addEventListener("pointermove", delMove);
+}else{
+  elLog.addEventListener("touchmove", function(e){
+    if(e.touches && e.touches[0]) delMove(e.touches[0]);
+  });
+  elLog.addEventListener("mousemove", delMove);
+}
 elLog.addEventListener("click", function(e){
   if(e.target.closest(".del")) e.preventDefault();
 });
@@ -864,15 +905,25 @@ function showSetup(){
 function showMain(){
   elSetup.classList.add("hidden");
   elMain.classList.remove("hidden");
-  /* All four closed -- also after a reset, when the page never reloads. */
-  document.getElementById("consumeWrap").open = true;
-  document.getElementById("timeWrap").open = false;
-  document.getElementById("logWrap").open = false;
-  document.getElementById("resetWrap").open = false;
-  document.getElementById("setWrap").open = false;
+  for(var i = 0; i < SECTIONS.length; i++){
+    var s = SECTIONS[i];
+    /* fall back to the default if an older save predates this section */
+    document.getElementById(s.id).open =
+      (S.open && S.open[s.id] !== undefined) ? S.open[s.id] : s.open;
+  }
   document.getElementById("verLine").textContent = "Version " + APP_VERSION;
   fillSettings(); renderLog(); render();
 }
+
+/* Bound once. Restoring above sets .open, which fires toggle again, so the
+   handler writes only on a real change and the round trip stops there. */
+function rememberOpen(){
+  if(S.open[this.id] === this.open) return;
+  S.open[this.id] = this.open;
+  persist();
+}
+for(var si = 0; si < SECTIONS.length; si++)
+  document.getElementById(SECTIONS[si].id).addEventListener("toggle", rememberOpen);
 
 document.getElementById("startBtn").addEventListener("click", function(){
   var t = parseFloat(suTotal.value);
@@ -885,12 +936,7 @@ document.getElementById("startBtn").addEventListener("click", function(){
   S.setupDone = true;
   S.dailyTotal = t;
   S.setupTotal = t;
-  S.earnedLocked = 0;
-  S.segStart = midnightOf(now);   /* credit what the day has already earned */
-  S.consumedTotal = 0;
-  S.entries = [];
-  S.dayMarkT = 0;
-  S.dayMarkEarned = 0;
+  clearLedger(midnightOf(now));   /* credit what the day has already earned */
   markDay(now);
   persist(); showMain();
 });
@@ -972,13 +1018,9 @@ function doReset(){
   S.setupDone = false;
   S.dailyTotal = DEFAULTS.dailyTotal;
   S.setupTotal = DEFAULTS.dailyTotal;
+  S.open = defaultOpen();
   clearConsumeRow();
-  S.earnedLocked = 0;
-  S.segStart = Date.now();
-  S.consumedTotal = 0;
-  S.entries = [];
-  S.dayMarkT = 0;
-  S.dayMarkEarned = 0;
+  clearLedger(Date.now());
   persist(); showSetup();
 }
 
