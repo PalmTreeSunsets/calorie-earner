@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  CALORIE EARNER  v1.8
+  CALORIE EARNER  v1.9
 
   Disclaimer: this app is for the personal use of the author. Other use is not
   allowed. It is a work in progress, it has not been reviewed for general use,
@@ -242,7 +242,7 @@ details[open] summary::after{content:" \2212"}
   <p class="caption">All three cover today only, midnight to midnight. The balance above never resets.</p>
 
   <details id="consumeWrap" open>
-    <summary>Consume</summary>
+    <summary>New entry</summary>
     <div class="spend">
       <button id="sign" aria-label="Subtract or add"><svg viewBox="0 0 24 24" aria-hidden="true"><line class="bar-h" x1="6" y1="12" x2="18" y2="12"/><line class="bar-v" x1="12" y1="6" x2="12" y2="18"/></svg></button>
       <input id="amount" type="text" inputmode="decimal" maxlength="4" placeholder="0" aria-label="Calories">
@@ -289,7 +289,7 @@ details[open] summary::after{content:" \2212"}
     <button id="clear" class="danger">Reset app</button>
     <p class="note">Throws away your balance. Clears the log. Resets the app back to the startup
       screen. This can't be undone.</p>
-    <p class="note" id="verLine">Version 1.8</p>
+    <p class="note" id="verLine">Version 1.9</p>
   </details>
 
 </div>
@@ -303,7 +303,7 @@ var KEY   = "calorie-earner-v2";
 var DAY   = 86400000;
 var PRUNE = 2 * DAY;            /* entries drop off 48h after they were logged */
 
-var APP_VERSION = "1.8";
+var APP_VERSION = "1.9";
 var HOLD_RESET_MS = 3000;   /* hold the armed reset button this long */
 var ARM_ROLLOVER  = 350;    /* a press held past this rolls straight into the hold */
 var HOLD_DEL_MS   = 1500;   /* hold a log entry's x this long */
@@ -339,8 +339,8 @@ function loadAsync(cb){
 
 /* The five collapsible sections, and how each one starts out. A fresh install
    and a reset both begin here; after that every section remembers how it was
-   last left, Consume included, so they all behave the same way. Consume opens
-   by default because it's the primary action and closing it costs a tap. */
+   last left, New entry included, so they all behave the same way. New entry
+   opens by default because it's the primary action and closing it costs a tap. */
 var SECTIONS = [
   { id: "consumeWrap", open: true  },
   { id: "timeWrap",    open: false },
@@ -450,7 +450,7 @@ function persist(){ saveRaw(JSON.stringify(S)); }
 
    The last one names permission rather than a portion, which is the honest
    answer once you're that far ahead. "Have" rather than "eat" because drinks
-   have calories too, the same reason the section above is called Consume. */
+   have calories too, the same reason the CONSUMED readout isn't called EATEN. */
 var MILESTONES = [
   { at: 200,  name: "snack" },
   { at: 700,  name: "meal" },
