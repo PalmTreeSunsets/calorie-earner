@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  CALORIE EARNER  v1.10
+  CALORIE EARNER  v1.11
 
   Disclaimer: this app is for the personal use of the author. Other use is not
   allowed. It is a work in progress, it has not been reviewed for general use,
@@ -94,16 +94,19 @@ input::placeholder{color:#5d6878}
 #amount{flex:0 0 72px}          /* fits 4 digits with even padding either side */
 /* The bars are drawn rather than typed, so - and + share one exact centre and one
    stroke weight; font metrics can't pull either off-centre. */
-#sign{position:relative;flex:0 0 26px;height:26px;padding:0;background:transparent;
-  color:var(--amber);border:1px solid var(--line);border-radius:7px;
+#sign{position:relative;flex:0 0 26px;height:26px;padding:0;background:var(--amber);
+  color:var(--bg);border:1px solid var(--amber);border-radius:7px;
   display:flex;align-items:center;justify-content:center}
 #sign svg{width:24px;height:24px;display:block}
 #sign svg line{stroke:currentColor;stroke-width:2.4;stroke-linecap:round}
 #sign .bar-v{display:none}
 /* the badge is small but the tap target isn't */
 #sign::after{content:"";position:absolute;left:-9px;right:-9px;top:-11px;bottom:-11px}
-/* add mode inverts the badge, so the state reads at a glance, not just on change */
-#sign.add{background:var(--amber);color:var(--bg);border-color:var(--amber)}
+/* One of the two states is inverted so the mode reads at a glance rather than
+   only at the moment it changes. The solid one is subtract, which puts the badge
+   in the same state as the button below it: both solid for Subtract, both
+   outlined for Add back. */
+#sign.add{background:transparent;color:var(--amber)}
 #sign.add .bar-v{display:inline}
 #label{flex:1;min-width:0}
 button{font-family:inherit;font-size:16px;font-weight:600;color:var(--bg);
@@ -194,7 +197,9 @@ details > .log{margin-top:16px}
 .tl-labels span.done b{color:var(--amber)}
 
 /* ---- collapsibles ---- */
-section,details{margin-top:26px;border-top:1px solid var(--line);padding-top:16px}
+/* 21px above every heading, open or collapsed, so the heading never shifts when
+   a section is opened -- only the space below it changes. */
+section,details{margin-top:26px;border-top:1px solid var(--line);padding-top:21px}
 /* The marker sits in its own column at the left edge, in line with the notes,
    inputs and buttons below it, and the heading text is indented past it. On the
    right they staggered with the length of each heading. */
@@ -206,10 +211,11 @@ summary::before{content:"+";position:absolute;left:0;top:0;
   font-family:var(--mono);letter-spacing:0}
 details[open] summary::before{content:"\2212"}
 /* A collapsed section is only its heading, so the 26px that would follow it is
-   pulled to 16px to match the padding above the heading. Without this the text
-   sits visibly high between the two border lines. */
+   pulled to 21px to match the padding above. 21 rather than 16 because 16+26
+   was the old total and splitting it evenly keeps a run of collapsed sections
+   the same height it always was -- centred rather than cramped. */
 details:not([open]) + details,
-details:not([open]) + section{margin-top:16px}
+details:not([open]) + section{margin-top:21px}
 .field{margin-top:16px}
 .field label{display:block;font-size:13px;color:var(--ink);margin-bottom:6px;font-weight:500}
 #suRate{margin-top:11px}
@@ -315,7 +321,7 @@ details:not([open]) + section{margin-top:16px}
     <button id="clear" class="danger">Reset app</button>
     <p class="note">Throws away your balance. Clears the log. Resets the app back to the startup
       screen. This can't be undone.</p>
-    <p class="note" id="verLine">Version 1.10</p>
+    <p class="note" id="verLine">Version 1.11</p>
   </details>
 
 </div>
@@ -333,7 +339,7 @@ var DAY   = 86400000;
    midnight, which for most people happens while they're asleep. */
 var KEEP_DAYS = 2;
 
-var APP_VERSION = "1.10";
+var APP_VERSION = "1.11";
 var HOLD_RESET_MS = 3000;   /* hold the armed reset button this long */
 var ARM_ROLLOVER  = 350;    /* a press held past this rolls straight into the hold */
 var HOLD_DEL_MS   = 1500;   /* hold a log entry's x this long */
