@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  CALORIE EARNER  v1.11
+  CALORIE EARNER  v1.12
 
   Disclaimer: this app is for the personal use of the author. Other use is not
   allowed. It is a work in progress, it has not been reviewed for general use,
@@ -32,6 +32,9 @@
   --muted:#8894a6;
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  /* Every gap touching a section's border line, above it and below it alike.
+     One value in one place, because the whole point is that they match. */
+  --sec-gap:21px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
@@ -197,9 +200,12 @@ details > .log{margin-top:16px}
 .tl-labels span.done b{color:var(--amber)}
 
 /* ---- collapsibles ---- */
-/* 21px above every heading, open or collapsed, so the heading never shifts when
-   a section is opened -- only the space below it changes. */
-section,details{margin-top:26px;border-top:1px solid var(--line);padding-top:21px}
+/* The same gap above a border and below it, so the line sits centred in its own
+   space and a section reads the same open or collapsed. A collapsed section is
+   just its heading with --sec-gap either side; an open one keeps the heading in
+   exactly the same place and grows downward. Nothing special-cases the two. */
+section,details{margin-top:var(--sec-gap);border-top:1px solid var(--line);
+  padding-top:var(--sec-gap)}
 /* The marker sits in its own column at the left edge, in line with the notes,
    inputs and buttons below it, and the heading text is indented past it. On the
    right they staggered with the length of each heading. */
@@ -210,12 +216,6 @@ summary::-webkit-details-marker{display:none}
 summary::before{content:"+";position:absolute;left:0;top:0;
   font-family:var(--mono);letter-spacing:0}
 details[open] summary::before{content:"\2212"}
-/* A collapsed section is only its heading, so the 26px that would follow it is
-   pulled to 21px to match the padding above. 21 rather than 16 because 16+26
-   was the old total and splitting it evenly keeps a run of collapsed sections
-   the same height it always was -- centred rather than cramped. */
-details:not([open]) + details,
-details:not([open]) + section{margin-top:21px}
 .field{margin-top:16px}
 .field label{display:block;font-size:13px;color:var(--ink);margin-bottom:6px;font-weight:500}
 #suRate{margin-top:11px}
@@ -321,7 +321,7 @@ details:not([open]) + section{margin-top:21px}
     <button id="clear" class="danger">Reset app</button>
     <p class="note">Throws away your balance. Clears the log. Resets the app back to the startup
       screen. This can't be undone.</p>
-    <p class="note" id="verLine">Version 1.11</p>
+    <p class="note" id="verLine">Version 1.12</p>
   </details>
 
 </div>
@@ -339,7 +339,7 @@ var DAY   = 86400000;
    midnight, which for most people happens while they're asleep. */
 var KEEP_DAYS = 2;
 
-var APP_VERSION = "1.11";
+var APP_VERSION = "1.12";
 var HOLD_RESET_MS = 3000;   /* hold the armed reset button this long */
 var ARM_ROLLOVER  = 350;    /* a press held past this rolls straight into the hold */
 var HOLD_DEL_MS   = 1500;   /* hold a log entry's x this long */
