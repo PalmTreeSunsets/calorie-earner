@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  CALORIE EARNER  v1.12
+  CALORIE EARNER  v1.13
 
   Disclaimer: this app is for the personal use of the author. Other use is not
   allowed. It is a work in progress, it has not been reviewed for general use,
@@ -32,8 +32,16 @@
   --muted:#8894a6;
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  /* Every gap touching a section's border line, above it and below it alike.
-     One value in one place, because the whole point is that they match. */
+  /* Two levels of vertical rhythm on the main screen, which reads as three
+     blocks: the meter, the readouts, then the collapsible sections.
+
+       --block-gap  separates the three blocks from each other.
+       --sec-gap    the rhythm inside the third block, above and below each
+                    section's border line.
+
+     The blocks are held further apart than the sections inside one of them, so
+     the grouping is visible without any extra rules or dividers. */
+  --block-gap:28px;
   --sec-gap:21px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -77,7 +85,7 @@ body{
 
 /* ---- readouts ---- */
 .readouts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--line);
-  border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:28px}
+  border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:var(--block-gap)}
 .readout{background:var(--panel);padding:11px 8px;text-align:center}
 .readout b{display:block;font-family:var(--mono);font-size:17px;font-weight:600;
   font-variant-numeric:tabular-nums;color:var(--ink)}
@@ -206,6 +214,13 @@ details > .log{margin-top:16px}
    exactly the same place and grows downward. Nothing special-cases the two. */
 section,details{margin-top:var(--sec-gap);border-top:1px solid var(--line);
   padding-top:var(--sec-gap)}
+/* The first section opens the third block, so the space above its line is a
+   block gap rather than a section gap. The line belongs to the section beneath
+   it, so it takes --sec-gap below regardless of what sits above. Written as the
+   boundary it is, rather than as a bottom margin on the caption -- adjacent
+   margins collapse, so a margin there would have to duplicate this number to
+   have any effect at all, and would then look like it was adding to it. */
+.caption + details{margin-top:var(--block-gap)}
 /* The marker sits in its own column at the left edge, in line with the notes,
    inputs and buttons below it, and the heading text is indented past it. On the
    right they staggered with the length of each heading. */
@@ -321,7 +336,7 @@ details[open] summary::before{content:"\2212"}
     <button id="clear" class="danger">Reset app</button>
     <p class="note">Throws away your balance. Clears the log. Resets the app back to the startup
       screen. This can't be undone.</p>
-    <p class="note" id="verLine">Version 1.12</p>
+    <p class="note" id="verLine">Version 1.13</p>
   </details>
 
 </div>
@@ -339,7 +354,7 @@ var DAY   = 86400000;
    midnight, which for most people happens while they're asleep. */
 var KEEP_DAYS = 2;
 
-var APP_VERSION = "1.12";
+var APP_VERSION = "1.13";
 var HOLD_RESET_MS = 3000;   /* hold the armed reset button this long */
 var ARM_ROLLOVER  = 350;    /* a press held past this rolls straight into the hold */
 var HOLD_DEL_MS   = 1500;   /* hold a log entry's x this long */
