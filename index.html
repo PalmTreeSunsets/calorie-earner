@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  CALORIE EARNER  v1.9
+  CALORIE EARNER  v1.10
 
   Disclaimer: this app is for the personal use of the author. Other use is not
   allowed. It is a work in progress, it has not been reviewed for general use,
@@ -120,7 +120,18 @@ button.danger{width:100%;margin-top:16px;color:var(--red);border:1px solid var(-
   background-repeat:no-repeat;background-position:center center;background-size:0% 100%}
 button.danger.holding{color:var(--ink)}
 #sub,#startBtn,#save{width:100%}
-#sub{margin-top:8px}          /* paired with the inputs above it */
+/* Amber does two jobs here: it's the data colour for the balance, the log, the
+   tick bar and the timeline fill, and it's also the colour of a screen's primary
+   button (Start earning, Save settings). Subtract is this section's primary
+   action, so it's solid amber -- it isn't claiming that subtracting is earning.
+
+   Add back is outlined instead. Putting calories back isn't earning them, and
+   the app shouldn't look like it endorses the escape; the entry stays one tap
+   away, it just isn't the loudest thing on screen. Red would be wrong -- that
+   means destructive here, and logging honestly is the last thing to discourage.
+   The transparent border in the base state keeps both modes the same height. */
+#sub{margin-top:8px;border:1px solid transparent}   /* paired with the inputs above it */
+#sub.addback{background:transparent;color:var(--amber);border-color:var(--amber)}
 @keyframes modeflip{0%{transform:scale(1)}35%{transform:scale(1.045)}100%{transform:scale(1)}}
 #sub.flip{animation:modeflip .34s ease}
 @media (prefers-reduced-motion: reduce){#sub.flip{animation:none}}
@@ -139,12 +150,17 @@ details > .log{margin-top:16px}
   font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600}
 .log time{font-family:var(--mono);font-size:12px;color:var(--ink);flex:0 0 52px;
   font-variant-numeric:tabular-nums;transition:color .15s}
-/* a finger covers the x while holding it, so the row's time reddens too */
 .log li.holding time{color:var(--red)}
 .log .amt{flex:0 0 52px;text-align:right;font-family:var(--mono);font-size:14px;
   font-variant-numeric:tabular-nums;color:var(--red)}
-.log .what{flex:1;min-width:0;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.log .what em{font-style:normal;color:var(--muted);font-size:14px}
+.log .what{flex:1;min-width:0;font-size:15px;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;transition:color .15s}
+.log .what em{font-style:normal;color:var(--muted);font-size:14px;transition:color .15s}
+/* the finger covers the x, so the row identifies itself: time and description
+   both redden. The amount is left alone -- its colour says which direction the
+   entry went, and an amber +300 turning red would read as a subtraction. */
+.log li.holding .what,
+.log li.holding .what em{color:var(--red)}
 .log .amt.plus{color:var(--amber)}
 .log .del{background:none;border:0;color:#4d5766;font-size:20px;padding:4px 12px;line-height:1;
   -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
@@ -179,11 +195,21 @@ details > .log{margin-top:16px}
 
 /* ---- collapsibles ---- */
 section,details{margin-top:26px;border-top:1px solid var(--line);padding-top:16px}
-summary{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);
+/* The marker sits in its own column at the left edge, in line with the notes,
+   inputs and buttons below it, and the heading text is indented past it. On the
+   right they staggered with the length of each heading. */
+summary{position:relative;padding-left:16px;
+  font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);
   font-weight:600;cursor:pointer;list-style:none}
 summary::-webkit-details-marker{display:none}
-summary::after{content:" +";font-family:var(--mono)}
-details[open] summary::after{content:" \2212"}
+summary::before{content:"+";position:absolute;left:0;top:0;
+  font-family:var(--mono);letter-spacing:0}
+details[open] summary::before{content:"\2212"}
+/* A collapsed section is only its heading, so the 26px that would follow it is
+   pulled to 16px to match the padding above the heading. Without this the text
+   sits visibly high between the two border lines. */
+details:not([open]) + details,
+details:not([open]) + section{margin-top:16px}
 .field{margin-top:16px}
 .field label{display:block;font-size:13px;color:var(--ink);margin-bottom:6px;font-weight:500}
 #suRate{margin-top:11px}
@@ -241,7 +267,7 @@ details[open] summary::after{content:" \2212"}
   </div>
   <p class="caption">All three cover today only, midnight to midnight. The balance above never resets.</p>
 
-  <details id="consumeWrap" open>
+  <details id="consumeWrap">
     <summary>New entry</summary>
     <div class="spend">
       <button id="sign" aria-label="Subtract or add"><svg viewBox="0 0 24 24" aria-hidden="true"><line class="bar-h" x1="6" y1="12" x2="18" y2="12"/><line class="bar-v" x1="12" y1="6" x2="12" y2="18"/></svg></button>
@@ -257,9 +283,9 @@ details[open] summary::after{content:" \2212"}
   <details id="logWrap">
     <summary id="logHead">Log</summary>
     <ul class="log" id="log"></ul>
-    <p class="note">Entries drop off 48 hours after they're logged. An entry dropping off never
-      changes your balance. Removing an entry with &times; does change your balance, since that's a
-      correction rather than time passing.</p>
+    <p class="note">The log keeps today and the two days before it. At midnight the oldest day
+      drops off. A day dropping off never changes your balance. Removing an entry with &times; does
+      change your balance, since that's a correction rather than time passing.</p>
   </details>
 
   <details id="timeWrap">
@@ -289,7 +315,7 @@ details[open] summary::after{content:" \2212"}
     <button id="clear" class="danger">Reset app</button>
     <p class="note">Throws away your balance. Clears the log. Resets the app back to the startup
       screen. This can't be undone.</p>
-    <p class="note" id="verLine">Version 1.9</p>
+    <p class="note" id="verLine">Version 1.10</p>
   </details>
 
 </div>
@@ -301,9 +327,13 @@ details[open] summary::after{content:" \2212"}
 "use strict";
 var KEY   = "calorie-earner-v2";
 var DAY   = 86400000;
-var PRUNE = 2 * DAY;            /* entries drop off 48h after they were logged */
+/* The log keeps today and this many whole days before it. Entries used to drop
+   off 48 hours after they were logged, which meant the day before yesterday
+   eroded through the morning while you watched. Whole days now go at once, at
+   midnight, which for most people happens while they're asleep. */
+var KEEP_DAYS = 2;
 
-var APP_VERSION = "1.9";
+var APP_VERSION = "1.10";
 var HOLD_RESET_MS = 3000;   /* hold the armed reset button this long */
 var ARM_ROLLOVER  = 350;    /* a press held past this rolls straight into the hold */
 var HOLD_DEL_MS   = 1500;   /* hold a log entry's x this long */
@@ -337,22 +367,22 @@ function loadAsync(cb){
   cb(null);
 }
 
-/* The five collapsible sections, and how each one starts out. A fresh install
-   and a reset both begin here; after that every section remembers how it was
-   last left, New entry included, so they all behave the same way. New entry
-   opens by default because it's the primary action and closing it costs a tap. */
-var SECTIONS = [
-  { id: "consumeWrap", open: true  },
-  { id: "timeWrap",    open: false },
-  { id: "logWrap",     open: false },
-  { id: "resetWrap",   open: false },
-  { id: "setWrap",     open: false }
-];
-function defaultOpen(){
-  var o = {}, i;
-  for(i = 0; i < SECTIONS.length; i++) o[SECTIONS[i].id] = SECTIONS[i].open;
-  return o;
-}
+/* Collapse state is deliberately not stored anywhere.
+
+   iOS gives no way to tell "swiped away" from "still open in the background",
+   but the page itself is the proxy: swiping the app away destroys the web view,
+   so the next launch is a fresh page load, while backgrounding normally leaves
+   the page alive. So the rule is simply that every section is closed in the
+   markup and nothing reopens it. A fresh load starts fully collapsed; coming
+   back to a page that was never unloaded finds the DOM exactly as it was left.
+
+   It fails in one direction only: iOS can evict a backgrounded web app under
+   memory pressure, or reload one that's been away a long time, and that reads
+   as a fresh load. Sections collapse when they didn't need to. A real swipe-away
+   never preserves state, which is the half that matters.
+
+   Reset calls collapseAll() by hand, because it returns to the setup screen
+   without reloading the page. */
 
 /* ---------------- state ----------------
    balance = earned(now) - consumedTotal
@@ -367,10 +397,9 @@ var S = {
   earnedLocked: 0,     /* earned before the current segment began */
   segStart: 0,         /* when the current rate started */
   consumedTotal: 0,    /* every calorie ever logged; never pruned */
-  entries: [],         /* rolling 48h window, for display only */
+  entries: [],         /* today and the two days before it, for display only */
   dayMarkT: 0,         /* the midnight we last observed */
-  dayMarkEarned: 0,    /* earned() as of that midnight */
-  open: defaultOpen()  /* which sections were left open */
+  dayMarkEarned: 0     /* earned() as of that midnight */
 };
 
 function ratePerMs(){ return S.dailyTotal / DAY; }
@@ -426,10 +455,20 @@ function consumedToday(now){
 }
 function stillComingToday(now){ return ratePerMs() * (nextMidnight(now) - now); }
 
+/* Midnight at the start of the oldest day still kept. Stepped by date rather
+   than by subtracting milliseconds so a DST change can't land it at 11pm or 1am
+   on the wrong day. */
+function pruneCutoff(now){
+  var d = new Date(now);
+  d.setHours(0,0,0,0);
+  d.setDate(d.getDate() - KEEP_DAYS);
+  return d.getTime();
+}
+
 function prune(now){
-  var keep = [], dropped = false;
+  var cutoff = pruneCutoff(now), keep = [], dropped = false;
   for(var i = 0; i < S.entries.length; i++){
-    if(now - S.entries[i].t < PRUNE) keep.push(S.entries[i]);
+    if(S.entries[i].t >= cutoff) keep.push(S.entries[i]);
     else dropped = true;
   }
   if(dropped) S.entries = keep;      /* consumedTotal deliberately untouched */
@@ -737,6 +776,7 @@ var addMode = false;
 function setSign(add, announce){
   addMode = add;
   signBtn.classList.toggle("add", add);      /* the svg swaps its own bars */
+  subBtn.classList.toggle("addback", add);   /* solid amber -> outlined */
   subBtn.textContent = add ? "Add back" : "Subtract";
   if(announce){
     subBtn.classList.remove("flip");
@@ -905,25 +945,15 @@ function showSetup(){
 function showMain(){
   elSetup.classList.add("hidden");
   elMain.classList.remove("hidden");
-  for(var i = 0; i < SECTIONS.length; i++){
-    var s = SECTIONS[i];
-    /* fall back to the default if an older save predates this section */
-    document.getElementById(s.id).open =
-      (S.open && S.open[s.id] !== undefined) ? S.open[s.id] : s.open;
-  }
   document.getElementById("verLine").textContent = "Version " + APP_VERSION;
   fillSettings(); renderLog(); render();
 }
 
-/* Bound once. Restoring above sets .open, which fires toggle again, so the
-   handler writes only on a real change and the round trip stops there. */
-function rememberOpen(){
-  if(S.open[this.id] === this.open) return;
-  S.open[this.id] = this.open;
-  persist();
+/* Only reset needs this; a fresh load is already collapsed by the markup. */
+function collapseAll(){
+  var d = elMain.getElementsByTagName("details");
+  for(var i = 0; i < d.length; i++) d[i].open = false;
 }
-for(var si = 0; si < SECTIONS.length; si++)
-  document.getElementById(SECTIONS[si].id).addEventListener("toggle", rememberOpen);
 
 document.getElementById("startBtn").addEventListener("click", function(){
   var t = parseFloat(suTotal.value);
@@ -1018,7 +1048,7 @@ function doReset(){
   S.setupDone = false;
   S.dailyTotal = DEFAULTS.dailyTotal;
   S.setupTotal = DEFAULTS.dailyTotal;
-  S.open = defaultOpen();
+  collapseAll();
   clearConsumeRow();
   clearLedger(Date.now());
   persist(); showSetup();
