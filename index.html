@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  CALORIE EARNER  v1.16
+  CALORIE EARNER  v1.17
 
   Disclaimer: this app is for the personal use of the author. Other use is not
   allowed. It is a work in progress, it has not been reviewed for general use,
@@ -258,7 +258,7 @@ details[open] summary::before{content:"\2212"}
 
   <div class="field">
     <label for="suTotal">Calories per day</label>
-    <input id="suTotal" type="text" inputmode="numeric" value="2000">
+    <input id="suTotal" type="text" inputmode="numeric">
     <p class="note">How fast the balance climbs. You'll earn this many calories every 24 hours,
       one at a time, at a steady rate. Set it to the number of calories you want to consume each
       day. You can change this later.</p>
@@ -267,7 +267,7 @@ details[open] summary::before{content:"\2212"}
   </div>
 
   <button id="startBtn">Start earning</button>
-  <p class="note" id="suVer">Version 1.16</p>
+  <p class="note" id="suVer">Version 1.17</p>
 </div>
 
 <!-- ============ SCREEN 2: THE METER ============ -->
@@ -340,7 +340,7 @@ details[open] summary::before{content:"\2212"}
     <button id="clear" class="danger">Reset app</button>
     <p class="note">Throws away your balance. Clears the log. Resets the app back to the startup
       screen. This can't be undone.</p>
-    <p class="note" id="verLine">Version 1.16</p>
+    <p class="note" id="verLine">Version 1.17</p>
   </details>
 
 </div>
@@ -358,13 +358,17 @@ var DAY   = 86400000;
    midnight, which for most people happens while they're asleep. */
 var KEEP_DAYS = 2;
 
-var APP_VERSION = "1.16";
+var APP_VERSION = "1.17";
 var HOLD_RESET_MS = 3000;   /* hold the armed reset button this long */
 var ARM_ROLLOVER  = 350;    /* a press held past this rolls straight into the hold */
 var HOLD_DEL_MS   = 1500;   /* hold a log entry's x this long */
 var ARM_TIMEOUT   = 5000;   /* armed reset disarms itself after this */
 
-var DEFAULTS = { dailyTotal: 2000 };
+/* Never shown, never offered, never typed into the box. It exists only so the
+   rate maths has something non-zero to divide by in the window between first
+   load and the end of setup, while the main screen is still hidden. The setup
+   box starts empty on purpose -- see the note on showSetup. */
+var PRESETUP_TOTAL = 2000;
 
 /* Hard floor. The app knows nothing about the person using it -- no height,
    weight, age or activity level -- so it can't judge whether a very low number
@@ -417,8 +421,8 @@ function loadAsync(cb){
    pruning the log leaves it untouched.                                  */
 var S = {
   setupDone: false,
-  dailyTotal: DEFAULTS.dailyTotal,
-  setupTotal: DEFAULTS.dailyTotal,   /* the rate chosen on the setup screen */
+  dailyTotal: PRESETUP_TOTAL,
+  setupTotal: PRESETUP_TOTAL,   /* the rate chosen on the setup screen */
   earnedLocked: 0,     /* earned before the current segment began */
   segStart: 0,         /* when the current rate started */
   consumedTotal: 0,    /* every calorie ever logged; never pruned */
@@ -514,12 +518,20 @@ function persist(){ saveRaw(JSON.stringify(S)); }
 
    The last one names permission rather than a portion, which is the honest
    answer once you're that far ahead. "Have" rather than "eat" because drinks
-   have calories too, the same reason the CONSUMED readout isn't called EATEN. */
+   have calories too, the same reason the CONSUMED readout isn't called EATEN.
+
+   1,800 and not 2,000. Nothing pins this mark to a particular number, so the
+   deciding factor is what the number drags along with it, and 2,000 drags a
+   lot: it's on every nutrition label and in every casual conversation about
+   food. Sitting at the top of a list of milestones it would read as a daily
+   requirement rather than as a balance you've saved up, and it would quietly
+   suggest the daily requirement is 2,000 -- which for most people it isn't.
+   1,800 is close enough to serve the same purpose and carries none of it. */
 var MILESTONES = [
   { at: 200,  name: "snack" },
   { at: 700,  name: "meal" },
   { at: 1200, name: "full meal" },
-  { at: 2000, name: "have whatever" }
+  { at: 1800, name: "have whatever" }
 ];
 
 /* The top mark sits at this point along the bar rather than at the end, so the
@@ -975,8 +987,15 @@ function ratePhrase(total){
 function updateRatePhrase(){ suRate.innerHTML = ratePhrase(parseFloat(suTotal.value)); }
 suTotal.addEventListener("input", updateRatePhrase);
 
+/* The box starts empty, with no default offered. A number sitting in it would
+   be read as a recommendation, and the only number that could go there is a
+   round one like 2,000 -- which most people would recognise from nutrition
+   labels and take as the daily requirement. Requirements vary enormously and
+   this screen has no room to teach anyone how to work theirs out, so it says
+   nothing rather than something wrong. The rate line below already handles an
+   empty box: it keeps the sentence and greys out the two slots. */
 function showSetup(){
-  suTotal.value = S.dailyTotal || DEFAULTS.dailyTotal;
+  suTotal.value = "";
   updateRatePhrase();
   elSetup.classList.remove("hidden");
   elMain.classList.add("hidden");
@@ -1093,8 +1112,8 @@ bindPress(clearBtn, function(e){
 function doReset(){
   disarmReset();
   S.setupDone = false;
-  S.dailyTotal = DEFAULTS.dailyTotal;
-  S.setupTotal = DEFAULTS.dailyTotal;
+  S.dailyTotal = PRESETUP_TOTAL;
+  S.setupTotal = PRESETUP_TOTAL;
   collapseAll();
   clearConsumeRow();
   clearLedger(Date.now());
