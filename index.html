@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  CALORIE EARNER  v1.13
+  CALORIE EARNER  v1.14
 
   Disclaimer: this app is for the personal use of the author. Other use is not
   allowed. It is a work in progress, it has not been reviewed for general use,
@@ -151,6 +151,9 @@ button.danger.holding{color:var(--ink)}
 @media (prefers-reduced-motion: reduce){#sub.flip{animation:none}}
 #save{margin-top:16px}
 #startBtn{margin-top:26px;padding:15px}
+/* A footer, not another note attached to the button, so it takes the block gap
+   rather than the 9px a note would. */
+#suVer{margin-top:var(--block-gap)}
 .note,.hint{font-size:12px;color:var(--muted);line-height:1.45;margin:9px 2px 0}
 
 /* ---- log ---- */
@@ -264,6 +267,7 @@ details[open] summary::before{content:"\2212"}
   </div>
 
   <button id="startBtn">Start earning</button>
+  <p class="note" id="suVer">Version 1.14</p>
 </div>
 
 <!-- ============ SCREEN 2: THE METER ============ -->
@@ -336,7 +340,7 @@ details[open] summary::before{content:"\2212"}
     <button id="clear" class="danger">Reset app</button>
     <p class="note">Throws away your balance. Clears the log. Resets the app back to the startup
       screen. This can't be undone.</p>
-    <p class="note" id="verLine">Version 1.13</p>
+    <p class="note" id="verLine">Version 1.14</p>
   </details>
 
 </div>
@@ -354,7 +358,7 @@ var DAY   = 86400000;
    midnight, which for most people happens while they're asleep. */
 var KEEP_DAYS = 2;
 
-var APP_VERSION = "1.13";
+var APP_VERSION = "1.14";
 var HOLD_RESET_MS = 3000;   /* hold the armed reset button this long */
 var ARM_ROLLOVER  = 350;    /* a press held past this rolls straight into the hold */
 var HOLD_DEL_MS   = 1500;   /* hold a log entry's x this long */
@@ -542,18 +546,31 @@ function untilParts(secs){
 }
 function daysAway(ms, now){ return Math.round((midnightOf(ms) - midnightOf(now)) / DAY); }
 
-/* "3:30pm" for later today. Past midnight a bare time would read as today, so
-   anything landing on another day shows the day instead. Two marks on the same
-   day both read "Wednesday"; the countdown row underneath separates them, and
-   does it absolutely rather than by position. */
+/* Minutes since midnight, to compare two clock faces rather than two instants. */
+function minOfDay(t){ var d = new Date(t); return d.getHours() * 60 + d.getMinutes(); }
+
+/* "3:30pm" for later today. A bare time is ambiguous exactly when that time
+   hasn't yet come round today -- "2:00pm" tomorrow, read at 1:59pm, looks like
+   one minute away. So tomorrow shows a bare time only once today's copy of it
+   has already gone by, and carries an abbreviated weekday until then. The
+   comparison is strict, so at exactly 2:00pm a 2:00pm mark still says "Mon".
+
+   Deliberately comparing clock faces rather than subtracting timestamps. A
+   24-hour delta agrees with this nearly always, and then doesn't: it drops the
+   qualifier thirty seconds early because the displayed minute hasn't ticked, and
+   on a spring-forward day it drops it a full hour early. Neither can happen when
+   nothing is subtracted.
+
+   Two days out and beyond, a mark is an estimate rather than an appointment, so
+   it names the day and no time. Those get the full weekday -- the abbreviation
+   exists only because a time is bolted to it, and there's room here. */
 function clockLabel(ms, now){
   var d = new Date(ms), days = daysAway(ms, now);
   if(days >= 7) return d.toLocaleDateString(undefined, { month:"short", day:"numeric" });
-  if(days >= 1) return d.toLocaleDateString(undefined, { weekday:"long" });
-  var h = d.getHours(), m = d.getMinutes();
-  var ap = h >= 12 ? "pm" : "am";
-  h = h % 12; if(h === 0) h = 12;
-  return h + ":" + (m < 10 ? "0" : "") + m + ap;
+  if(days >= 2) return d.toLocaleDateString(undefined, { weekday:"long" });
+  if(days === 1 && minOfDay(ms) >= minOfDay(now))
+    return d.toLocaleDateString(undefined, { weekday:"short" }) + " " + hhmm(ms);
+  return hhmm(ms);
 }
 function timeMarkup(parts){
   if(parts.one) return '<i class="one">' + parts.one + '</i>';
@@ -713,7 +730,8 @@ function shortInterval(secs){
 }
 function fmtDown(n){ return Math.floor(n).toLocaleString(); }
 function fmtUp(n){ return Math.ceil(n).toLocaleString(); }
-/* "7:07am" -- matches the timeline's clock row */
+/* "7:07am" -- the log's times and the timeline's clock row are the same format
+   by definition, so they're the same function. clockLabel calls this too. */
 function hhmm(t){
   var d = new Date(t), h = d.getHours(), m = d.getMinutes();
   var ap = h >= 12 ? "pm" : "am"; h = h % 12; if(h === 0) h = 12;
@@ -966,9 +984,17 @@ function showSetup(){
 function showMain(){
   elSetup.classList.add("hidden");
   elMain.classList.remove("hidden");
-  document.getElementById("verLine").textContent = "Version " + APP_VERSION;
   fillSettings(); renderLog(); render();
 }
+
+/* Both screens carry the version. The text in the markup is a fallback for the
+   case where this never runs; APP_VERSION is the ground truth. */
+function stampVersion(){
+  var v = "Version " + APP_VERSION;
+  document.getElementById("verLine").textContent = v;
+  document.getElementById("suVer").textContent   = v;
+}
+stampVersion();
 
 /* Only reset needs this; a fresh load is already collapsed by the markup. */
 function collapseAll(){
