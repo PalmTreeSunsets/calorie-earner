@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  CALORIE EARNER  v1.141
+  CALORIE EARNER  v1.16
 
   Disclaimer: this app is for the personal use of the author. Other use is not
   allowed. It is a work in progress, it has not been reviewed for general use,
@@ -41,8 +41,8 @@
 
      The blocks are held further apart than the sections inside one of them, so
      the grouping is visible without any extra rules or dividers. */
-  --block-gap:28px;
-  --sec-gap:23px;
+  --block-gap:32px;
+  --sec-gap:24px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
@@ -267,7 +267,7 @@ details[open] summary::before{content:"\2212"}
   </div>
 
   <button id="startBtn">Start earning</button>
-  <p class="note" id="suVer">Version 1.141</p>
+  <p class="note" id="suVer">Version 1.16</p>
 </div>
 
 <!-- ============ SCREEN 2: THE METER ============ -->
@@ -340,7 +340,7 @@ details[open] summary::before{content:"\2212"}
     <button id="clear" class="danger">Reset app</button>
     <p class="note">Throws away your balance. Clears the log. Resets the app back to the startup
       screen. This can't be undone.</p>
-    <p class="note" id="verLine">Version 1.141</p>
+    <p class="note" id="verLine">Version 1.16</p>
   </details>
 
 </div>
@@ -358,7 +358,7 @@ var DAY   = 86400000;
    midnight, which for most people happens while they're asleep. */
 var KEEP_DAYS = 2;
 
-var APP_VERSION = "1.141";
+var APP_VERSION = "1.16";
 var HOLD_RESET_MS = 3000;   /* hold the armed reset button this long */
 var ARM_ROLLOVER  = 350;    /* a press held past this rolls straight into the hold */
 var HOLD_DEL_MS   = 1500;   /* hold a log entry's x this long */
