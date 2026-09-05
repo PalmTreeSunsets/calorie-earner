@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  CALORIE EARNER  v1.20
+  CALORIE EARNER  v1.21
 
   Disclaimer: this app is for the personal use of the author. Other use is not
   allowed. It is a work in progress, it has not been reviewed for general use,
@@ -196,12 +196,6 @@ details > .log{margin-top:16px}
 .tl-clocks i.h,.tl-countdown i.h{right:3px}       /* ends just left of the notch */
 .tl-clocks i.m,.tl-countdown i.m{left:3px}        /* starts just right of it */
 .tl-clocks i.one,.tl-countdown i.one{left:0;transform:translateX(-50%)}
-/* The colon-pivoted halves meet half a character to the right of the notch, so
-   the colon -- the last character of the left half -- straddles it. 0.3em is
-   half the advance width of a monospace glyph, which is 0.6em in SF Mono and
-   near enough in the fallbacks. */
-.tl-clocks i.h.col{right:-0.3em}
-.tl-clocks i.m.col{left:0.3em}
 /* the tick straddles the clock row and the countdown row, standing in for both */
 .tl-countdown i.mark{left:0;transform:translateX(-50%);top:-8px;font-size:15px;line-height:1}
 .tl-countdown span.done i{color:var(--amber)}
@@ -284,7 +278,7 @@ details[open] summary::before{content:"\2212"}
   </div>
 
   <button id="startBtn">Start earning</button>
-  <p class="note" id="suVer">Version 1.20</p>
+  <p class="note" id="suVer">Version 1.21</p>
 </div>
 
 <!-- ============ SCREEN 2: THE METER ============ -->
@@ -357,7 +351,7 @@ details[open] summary::before{content:"\2212"}
     <button id="clear" class="danger">Reset app</button>
     <p class="note">Throws away your balance. Clears the log. Resets the app back to the startup
       screen. This can't be undone.</p>
-    <p class="note" id="verLine">Version 1.20</p>
+    <p class="note" id="verLine">Version 1.21</p>
   </details>
 
 </div>
@@ -375,7 +369,7 @@ var DAY   = 86400000;
    midnight, which for most people happens while they're asleep. */
 var KEEP_DAYS = 2;
 
-var APP_VERSION = "1.20";
+var APP_VERSION = "1.21";
 var HOLD_RESET_MS = 3000;   /* hold the armed reset button this long */
 var ARM_ROLLOVER  = 350;    /* a press held past this rolls straight into the hold */
 var HOLD_DEL_MS   = 1500;   /* hold a log entry's x this long */
@@ -607,22 +601,18 @@ function timeMarkup(parts){
 }
 
 /* Two-word labels split at the space so the gap lands on the notch, exactly
-   like the countdown underneath. One-word labels centre instead.
+   like the countdown underneath. Everything else centres on the notch instead.
 
-   A day + time label is the exception. Splitting "Sun 11:04pm" at the space
-   would put the whole time to the right of the notch and only "Sun" to the
-   left, which reads as though the time has slid sideways. It pivots on the
-   colon instead: the colon straddles the notch and the time hangs off it the
-   way a clock face reads. A bare time like "3:04pm" is left alone -- pivoting
-   that one on its colon would leave a single digit on the left and four
-   characters on the right, which is the same problem in miniature. */
+   Anything containing a time centres, whether or not it carries a weekday.
+   Splitting "Sun 11:04pm" at its space threw the whole time to the right of the
+   notch; pivoting it on the colon then threw "Sun 11" too far to the left,
+   because a weekday plus two digits is heavier than the four characters facing
+   it. Centring the string balances by construction and treats "3:04pm" and
+   "Sun 3:04pm" as the same kind of thing. The colons no longer line up with the
+   notches, which is the price. */
 function splitMarkup(text){
-  var c = text.indexOf(":");
-  if(c > 0 && text.indexOf(" ") > 0)
-    return '<i class="h col">' + esc(text.slice(0, c + 1)) + '</i>' +
-           '<i class="m col">' + esc(text.slice(c + 1)) + '</i>';
   var i = text.lastIndexOf(" ");
-  if(i < 0) return '<i class="one">' + esc(text) + '</i>';
+  if(i < 0 || text.indexOf(":") > 0) return '<i class="one">' + esc(text) + '</i>';
   return '<i class="h">' + esc(text.slice(0, i)) + '</i>' +
          '<i class="m">' + esc(text.slice(i + 1)) + '</i>';
 }
