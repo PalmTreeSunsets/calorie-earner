@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  CALORIE EARNER  v1.17
+  CALORIE EARNER  v1.20
 
   Disclaimer: this app is for the personal use of the author. Other use is not
   allowed. It is a work in progress, it has not been reviewed for general use,
@@ -196,12 +196,29 @@ details > .log{margin-top:16px}
 .tl-clocks i.h,.tl-countdown i.h{right:3px}       /* ends just left of the notch */
 .tl-clocks i.m,.tl-countdown i.m{left:3px}        /* starts just right of it */
 .tl-clocks i.one,.tl-countdown i.one{left:0;transform:translateX(-50%)}
+/* The colon-pivoted halves meet half a character to the right of the notch, so
+   the colon -- the last character of the left half -- straddles it. 0.3em is
+   half the advance width of a monospace glyph, which is 0.6em in SF Mono and
+   near enough in the fallbacks. */
+.tl-clocks i.h.col{right:-0.3em}
+.tl-clocks i.m.col{left:0.3em}
 /* the tick straddles the clock row and the countdown row, standing in for both */
 .tl-countdown i.mark{left:0;transform:translateX(-50%);top:-8px;font-size:15px;line-height:1}
 .tl-countdown span.done i{color:var(--amber)}
 .tl-bar{position:relative;height:6px;background:var(--line);border-radius:99px;margin:7px 0 0}
 .tl-fill{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--amber);
   border-radius:99px;transition:width .95s linear}
+/* One calorie is about a sixth of a pixel on this bar, so the first dozen or so
+   are drawn too thin to see and the fill appears not to have started. This puts
+   a floor under it: once the balance reads 1, there's a visible nub. The floor
+   stops mattering at about 11 calories, where the real width overtakes it, so
+   nothing above that changes.
+
+   min-width rather than a wider percentage, so the honest percentage is still
+   what's set and this only ever clamps the drawn result. 2px because 1px lands
+   inside the bar's 3px rounded cap and reads as a rendering artifact rather
+   than as fill. */
+.tl-fill.nonzero{min-width:2px}
 .tl-mark{position:absolute;top:-3px;width:2px;height:12px;background:var(--bg);border-radius:1px}
 .tl-labels{position:relative;height:34px;margin-top:9px}
 .tl-labels span{position:absolute;top:0;transform:translateX(-50%);text-align:center;
@@ -267,7 +284,7 @@ details[open] summary::before{content:"\2212"}
   </div>
 
   <button id="startBtn">Start earning</button>
-  <p class="note" id="suVer">Version 1.17</p>
+  <p class="note" id="suVer">Version 1.20</p>
 </div>
 
 <!-- ============ SCREEN 2: THE METER ============ -->
@@ -340,7 +357,7 @@ details[open] summary::before{content:"\2212"}
     <button id="clear" class="danger">Reset app</button>
     <p class="note">Throws away your balance. Clears the log. Resets the app back to the startup
       screen. This can't be undone.</p>
-    <p class="note" id="verLine">Version 1.17</p>
+    <p class="note" id="verLine">Version 1.20</p>
   </details>
 
 </div>
@@ -358,7 +375,7 @@ var DAY   = 86400000;
    midnight, which for most people happens while they're asleep. */
 var KEEP_DAYS = 2;
 
-var APP_VERSION = "1.17";
+var APP_VERSION = "1.20";
 var HOLD_RESET_MS = 3000;   /* hold the armed reset button this long */
 var ARM_ROLLOVER  = 350;    /* a press held past this rolls straight into the hold */
 var HOLD_DEL_MS   = 1500;   /* hold a log entry's x this long */
@@ -590,8 +607,20 @@ function timeMarkup(parts){
 }
 
 /* Two-word labels split at the space so the gap lands on the notch, exactly
-   like the countdown underneath. One-word labels centre instead. */
+   like the countdown underneath. One-word labels centre instead.
+
+   A day + time label is the exception. Splitting "Sun 11:04pm" at the space
+   would put the whole time to the right of the notch and only "Sun" to the
+   left, which reads as though the time has slid sideways. It pivots on the
+   colon instead: the colon straddles the notch and the time hangs off it the
+   way a clock face reads. A bare time like "3:04pm" is left alone -- pivoting
+   that one on its colon would leave a single digit on the left and four
+   characters on the right, which is the same problem in miniature. */
 function splitMarkup(text){
+  var c = text.indexOf(":");
+  if(c > 0 && text.indexOf(" ") > 0)
+    return '<i class="h col">' + esc(text.slice(0, c + 1)) + '</i>' +
+           '<i class="m col">' + esc(text.slice(c + 1)) + '</i>';
   var i = text.lastIndexOf(" ");
   if(i < 0) return '<i class="one">' + esc(text) + '</i>';
   return '<i class="h">' + esc(text.slice(0, i)) + '</i>' +
@@ -645,6 +674,10 @@ function renderTimeline(now, bal){
 
   /* Fills past the top mark at the same rate, then stops at the end of the bar. */
   elTlFill.style.width = Math.max(0, Math.min(100, bal / tlScaleMax * 100)) + "%";
+  /* Keyed to 1 rather than to 0, so the nub appears in the same instant the
+     digits above turn from 0 to 1, and goes when they go back. The digits are
+     floored, so a balance reading 1 is anything from 1 up to but not 2. */
+  elTlFill.classList.toggle("nonzero", bal >= 1);
 
   var perSec = S.dailyTotal / 86400, i, it, secs;
 
@@ -1020,6 +1053,33 @@ function collapseAll(){
   var d = elMain.getElementsByTagName("details");
   for(var i = 0; i < d.length; i++) d[i].open = false;
 }
+
+/* Opening a section low on the screen can put most of what you just asked for
+   below the fold, leaving you to scroll for it. So: scroll down by whatever it
+   takes to bring the bottom into view, but never by more than would push the
+   heading off the top. A section taller than the screen therefore settles with
+   its heading at the top rather than its footer at the bottom, which is the way
+   round you want -- losing the heading you just tapped is worse than not seeing
+   the last line. A section that already fits doesn't move at all.
+
+   Motion is dropped entirely for anyone who has asked the system to reduce it;
+   they get the same final position, instantly. */
+var lessMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)");
+
+function revealOnOpen(){
+  if(!this.open) return;
+  var r = this.getBoundingClientRect();
+  var over = r.bottom - window.innerHeight;
+  if(over <= 0) return;                        /* already fully visible */
+  var by = Math.min(over, Math.max(0, r.top)); /* never hide the heading */
+  if(by <= 0) return;
+  if(lessMotion && lessMotion.matches) window.scrollBy(0, by);
+  else window.scrollBy({ top: by, behavior: "smooth" });
+}
+
+var tglList = elMain.getElementsByTagName("details");
+for(var tgl = 0; tgl < tglList.length; tgl++)
+  tglList[tgl].addEventListener("toggle", revealOnOpen);
 
 document.getElementById("startBtn").addEventListener("click", function(){
   var t = parseFloat(suTotal.value);
