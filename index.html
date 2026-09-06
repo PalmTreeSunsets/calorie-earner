@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  CALORIE EARNER  v1.22
+  CALORIE EARNER  v1.24
 
   Disclaimer: this app is for the personal use of the author. Other use is not
   allowed. It is a work in progress, it has not been reviewed for general use,
@@ -278,7 +278,7 @@ details[open] summary::before{content:"\2212"}
   </div>
 
   <button id="startBtn">Start earning</button>
-  <p class="note" id="suVer">Version 1.22</p>
+  <p class="note" id="suVer">Version 1.24</p>
 </div>
 
 <!-- ============ SCREEN 2: THE METER ============ -->
@@ -339,9 +339,13 @@ details[open] summary::before{content:"\2212"}
     <div class="field">
       <label for="sTotal">Calories per day</label>
       <input id="sTotal" type="text" inputmode="numeric">
+      <!-- The em dash is a fallback that fillSettings() always overwrites; it is
+           never seen. It is deliberately not a number: any literal in here is a
+           number the app appears to suggest, and 2,000 in particular is the one
+           number this app goes out of its way never to put in front of anyone. -->
       <p class="note">Changing this only changes the pace from this moment on. Calories you've
         already earned stay exactly where they are. The lowest allowed value is 1,200.
-        Your starting calories per day was <span id="sOriginal">2,000</span>.</p>
+        Your starting calories per day was <span id="sOriginal">&mdash;</span>.</p>
       <p class="note" id="sRate"></p>
     </div>
     <button id="save">Save settings</button>
@@ -351,7 +355,7 @@ details[open] summary::before{content:"\2212"}
     <button id="clear" class="danger">Reset app</button>
     <p class="note">Throws away your balance. Clears the log. Resets the app back to the startup
       screen. This can't be undone.</p>
-    <p class="note" id="verLine">Version 1.22</p>
+    <p class="note" id="verLine">Version 1.24</p>
   </details>
 
 </div>
@@ -369,7 +373,7 @@ var DAY   = 86400000;
    midnight, which for most people happens while they're asleep. */
 var KEEP_DAYS = 2;
 
-var APP_VERSION = "1.22";
+var APP_VERSION = "1.24";
 var HOLD_RESET_MS = 3000;   /* hold the armed reset button this long */
 var ARM_ROLLOVER  = 350;    /* a press held past this rolls straight into the hold */
 var HOLD_DEL_MS   = 1500;   /* hold a log entry's x this long */
@@ -775,9 +779,18 @@ function hhmm(t){
 
 function render(){
   var now = Date.now();
-  var changed = markDay(now);
-  if(prune(now)){ changed = true; renderLog(); }
-  if(changed) persist();
+  /* Both of these change what the log should say. Pruning is the obvious one.
+     The day turning matters just as much: the headings are worked out at render
+     time, so entries logged yesterday keep saying "Today" until something
+     redraws them -- and at midnight there is often nothing to prune, because
+     the log only drops a day once three of them have accumulated. Without the
+     restamp the log and the CONSUMED readout disagree about what day it is.
+
+     Called separately rather than short-circuited, so prune() still runs on
+     every tick regardless of what markDay() returned. */
+  var turned = markDay(now);
+  var pruned = prune(now);
+  if(turned || pruned){ renderLog(); persist(); }
 
   var bal = balanceAt(now);
   setDigits(String(Math.floor(bal)));
@@ -1165,6 +1178,31 @@ bindPress(clearBtn, function(e){
   }
   startHold();
 }, releaseHold);
+
+/* The finger has to stay on the button for the three seconds to keep running.
+   Pointer capture means the move events still arrive after it has left, so the
+   test is the button's own rectangle rather than a drift radius: a target this
+   big should be left deliberately, not escaped by accident. The log's x uses a
+   10px tolerance instead because it's small enough that ordinary finger
+   movement would cancel it.
+
+   Guarded on `pressed` so it only ever applies while the finger is actually
+   down. A tap that arms the button and lifts is untouched -- that half of the
+   gesture is supposed to survive the finger going elsewhere. */
+function resetMove(p){
+  if(!pressed) return;
+  var r = clearBtn.getBoundingClientRect();
+  if(p.clientX < r.left || p.clientX > r.right ||
+     p.clientY < r.top  || p.clientY > r.bottom) disarmReset();
+}
+if(window.PointerEvent){
+  clearBtn.addEventListener("pointermove", resetMove);
+}else{
+  clearBtn.addEventListener("touchmove", function(e){
+    if(e.touches && e.touches[0]) resetMove(e.touches[0]);
+  });
+  clearBtn.addEventListener("mousemove", resetMove);
+}
 
 function doReset(){
   disarmReset();
