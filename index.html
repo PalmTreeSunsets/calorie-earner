@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  CALORIE EARNER  v1.24
+  CALORIE EARNER  v1.25
 
   Disclaimer: this app is for the personal use of the author. Other use is not
   allowed. It is a work in progress, it has not been reviewed for general use,
@@ -278,7 +278,7 @@ details[open] summary::before{content:"\2212"}
   </div>
 
   <button id="startBtn">Start earning</button>
-  <p class="note" id="suVer">Version 1.24</p>
+  <p class="note" id="suVer">Version 1.25</p>
 </div>
 
 <!-- ============ SCREEN 2: THE METER ============ -->
@@ -307,7 +307,10 @@ details[open] summary::before{content:"\2212"}
     <summary>New entry</summary>
     <div class="spend">
       <button id="sign" aria-label="Subtract or add"><svg viewBox="0 0 24 24" aria-hidden="true"><line class="bar-h" x1="6" y1="12" x2="18" y2="12"/><line class="bar-v" x1="12" y1="6" x2="12" y2="18"/></svg></button>
-      <input id="amount" type="text" inputmode="decimal" maxlength="4" placeholder="0" aria-label="Calories">
+      <!-- numeric rather than decimal: a fractional calorie isn't a thing anyone
+           means to log, and letting one into the ledger would knock the readouts
+           off the balance's grid. See the note on ticksAt(). -->
+      <input id="amount" type="text" inputmode="numeric" maxlength="4" placeholder="0" aria-label="Calories">
       <input id="label" type="text" placeholder="What was it? (optional)" aria-label="What was it">
     </div>
     <button id="sub">Subtract</button>
@@ -355,7 +358,7 @@ details[open] summary::before{content:"\2212"}
     <button id="clear" class="danger">Reset app</button>
     <p class="note">Throws away your balance. Clears the log. Resets the app back to the startup
       screen. This can't be undone.</p>
-    <p class="note" id="verLine">Version 1.24</p>
+    <p class="note" id="verLine">Version 1.25</p>
   </details>
 
 </div>
@@ -373,7 +376,7 @@ var DAY   = 86400000;
    midnight, which for most people happens while they're asleep. */
 var KEEP_DAYS = 2;
 
-var APP_VERSION = "1.24";
+var APP_VERSION = "1.25";
 var HOLD_RESET_MS = 3000;   /* hold the armed reset button this long */
 var ARM_ROLLOVER  = 350;    /* a press held past this rolls straight into the hold */
 var HOLD_DEL_MS   = 1500;   /* hold a log entry's x this long */
@@ -443,7 +446,7 @@ var S = {
   consumedTotal: 0,    /* every calorie ever logged; never pruned */
   entries: [],         /* today and the two days before it, for display only */
   dayMarkT: 0,         /* the midnight we last observed */
-  dayMarkEarned: 0     /* earned() as of that midnight */
+  dayMarkEarned: 0     /* whole calories earned as of that midnight */
 };
 
 function ratePerMs(){ return S.dailyTotal / DAY; }
@@ -453,6 +456,17 @@ function earnedAt(t){
   return S.earnedLocked + ratePerMs() * d;
 }
 function balanceAt(t){ return earnedAt(t) - S.consumedTotal; }
+
+/* Whole calories earned as of t -- the count the odometer is displaying.
+
+   The odometer shows floor(balance) = floor(earnedAt - consumedTotal), and
+   consumedTotal is always a whole number, so floor(earnedAt) steps in exactly
+   the same instant. Anything built from this function therefore changes when
+   the odometer changes and the tick bar resets, by construction rather than by
+   agreement. That is the whole reason the entry fields reject decimals: one
+   fractional entry would shift consumedTotal off the integers and break the
+   shared grid permanently. */
+function ticksAt(t){ return Math.floor(earnedAt(t)); }
 
 /* Freeze what's been earned, start a new segment. The past is sealed. */
 function reanchor(now){
@@ -481,23 +495,53 @@ function clearLedger(segStart){
 function midnightOf(t){ var d = new Date(t); d.setHours(0,0,0,0); return d.getTime(); }
 function nextMidnight(t){ var d = new Date(t); d.setHours(0,0,0,0); d.setDate(d.getDate()+1); return d.getTime(); }
 
-/* Today's reference figures. Purely informational -- nothing here feeds the balance. */
+/* Today's reference figures. Purely informational -- nothing here feeds the
+   balance.
+
+   All three are counts of whole calories, not continuous quantities rounded at
+   the end. EARNED is how many calorie ticks have happened since midnight;
+   STILL COMING is how many more will happen before the next one. Both are
+   built from ticksAt(), the same expression the odometer displays, so the four
+   numbers on screen are one event rather than four calculations that happen to
+   agree. EARNED + STILL COMING is a constant for the day, so they always move
+   in opposite directions in the same instant.
+
+   They used to be able to drift apart, and did. EARNED was earnedAt(now) minus
+   a fractional anchor; STILL COMING was rate x time remaining, computed off the
+   wall clock without touching earnedAt at all. A rate change saved mid-calorie,
+   or a DST transition, left the balance crossing whole numbers at one set of
+   instants and the readouts at another -- a fixed offset of up to one calorie
+   interval, every day, with nothing to bring them back.
+
+   The price is paid at the end of the day, and it is deliberate: if the tick
+   grid is offset from midnight, the day's last whole calorie lands a few
+   seconds early and STILL COMING reads 0 until the day turns. That is true --
+   fewer than one whole calorie is still coming -- and it is the same
+   convention as the odometer reading 0 for the first interval after a fresh
+   setup. Removing it would mean silently moving either the rate or the
+   balance, and would hand back the sync this derivation exists to guarantee.
+   See HANDOVER.md for the alternatives and why each was rejected. */
 function markDay(now){
   var mid = midnightOf(now);
   if(S.dayMarkT !== mid){
-    S.dayMarkEarned = earnedAt(mid);
+    S.dayMarkEarned = ticksAt(mid);
     S.dayMarkT = mid;
     return true;
   }
   return false;
 }
-function earnedToday(now){ return earnedAt(now) - S.dayMarkEarned; }
+function earnedToday(now){ return ticksAt(now) - S.dayMarkEarned; }
 function consumedToday(now){
   var mid = midnightOf(now), n = 0;
   for(var i = 0; i < S.entries.length; i++) if(S.entries[i].t >= mid) n += S.entries[i].amt;
   return n;
 }
-function stillComingToday(now){ return ratePerMs() * (nextMidnight(now) - now); }
+/* Ticks left before midnight, at the current rate. The far end is recomputed
+   every render rather than stored, so saving a new rate moves this number
+   immediately -- up if the rate went up, down if it went down. That is correct
+   and worth seeing: changing the pace genuinely changes how much is still
+   coming today. The balance and EARNED don't move. */
+function stillComingToday(now){ return ticksAt(nextMidnight(now)) - ticksAt(now); }
 
 /* Midnight at the start of the oldest day still kept. Stepped by date rather
    than by subtracting milliseconds so a DST change can't land it at 11pm or 1am
@@ -767,8 +811,12 @@ function shortInterval(secs){
   var h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), sc = t % 60;
   return (h ? h + "h " + m + "m " : m + "m ") + sc + "s";
 }
-function fmtDown(n){ return Math.floor(n).toLocaleString(); }
-function fmtUp(n){ return Math.ceil(n).toLocaleString(); }
+/* The readouts used to round three different ways -- floor for EARNED, ceil for
+   STILL COMING, round for CONSUMED -- because the first two were continuous
+   quantities and the rounding was carrying the design. They are counts now, so
+   all three format the same way. fmt() survives on CONSUMED as a guard: entries
+   written by older builds could be fractional, since the field only started
+   refusing decimals in v1.25. */
 /* "7:07am" -- the log's times and the timeline's clock row are the same format
    by definition, so they're the same function. clockLabel calls this too. */
 function hhmm(t){
@@ -795,9 +843,9 @@ function render(){
   var bal = balanceAt(now);
   setDigits(String(Math.floor(bal)));
 
-  elEarned.textContent = fmtDown(earnedToday(now));
+  elEarned.textContent = fmt(earnedToday(now));
   elEaten.textContent  = fmt(consumedToday(now));
-  elLeft.textContent   = fmtUp(stillComingToday(now));
+  elLeft.textContent   = fmt(stillComingToday(now));
 
   renderTimeline(now, bal);
 
@@ -874,9 +922,15 @@ function setSign(add, announce){
 signBtn.addEventListener("click", function(){ setSign(!addMode, true); });
 setSign(false);
 
+/* Rejected rather than rounded. Rounding would file a number the user didn't
+   type, and this is the one field where a fraction does real damage: it lands
+   in consumedTotal and shifts the balance off the grid the readouts share with
+   it, for good. The message says "whole number" rather than "whole number of
+   calories" so it can't be misread as a fitness term. */
 function submit(){
   var n = Math.abs(parseFloat(amount.value));
   if(!isFinite(n) || n === 0){ amount.focus(); return; }
+  if(n !== Math.floor(n)){ toast("Enter a whole number."); amount.focus(); return; }
   var v = addMode ? -n : n;          /* stored positive = consumed */
   var now = Date.now();
   S.entries.push({ id: "e" + now + Math.random().toString(36).slice(2,7),
@@ -981,6 +1035,7 @@ document.getElementById("save").addEventListener("click", function(){
   if(!sTotal.value.trim()){ toast("Enter your calories per day."); return; }
   var t = parseFloat(sTotal.value);
   if(!isFinite(t) || t <= 0){ toast("Please enter a different number."); return; }
+  if(t !== Math.floor(t)){ toast("Enter a whole number."); return; }
   if(t < MIN_DAILY){
     toast("The lowest allowed value is " + MIN_DAILY.toLocaleString() + ".");
     return;
@@ -1094,6 +1149,12 @@ document.getElementById("startBtn").addEventListener("click", function(){
   if(!suTotal.value.trim()){ toast("Enter your calories per day."); suTotal.focus(); return; }
   var t = parseFloat(suTotal.value);
   if(!isFinite(t) || t <= 0){ toast("Please enter a different number."); suTotal.focus(); return; }
+  /* Not strictly required here -- a fractional rate can't break the readouts,
+     since the day's anchors are whole calories whatever the pace. It's the same
+     rule as the log so there's one rule rather than one with an exception.
+     Checked before the floor, so a malformed number is named as malformed
+     before it's judged against a range. */
+  if(t !== Math.floor(t)){ toast("Enter a whole number."); suTotal.focus(); return; }
   if(t < MIN_DAILY){
     toast("The lowest allowed value is " + MIN_DAILY.toLocaleString() + ".");
     suTotal.focus(); return;
@@ -1223,6 +1284,17 @@ loadAsync(function(raw){
       for(var k in S) if(o[k] !== undefined) S[k] = o[k];
     }catch(e){}
   }
+  /* v1.24 and earlier stored this as the raw fractional earnedAt(midnight); it
+     is a whole-calorie count now. Flooring the stored value is exact, because
+     the new anchor is precisely the floor of the old one.
+
+     Deliberately not recomputed from earnedAt(). On a day whose rate has
+     already changed, reanchor() has thrown away what the old rate was, so
+     earnedAt(midnight) can no longer be worked out -- it would clamp to
+     earnedLocked and read high. The stored number is the only surviving record
+     of it. Flooring an integer is a no-op, so this just runs every boot rather
+     than carrying a migration flag. */
+  S.dayMarkEarned = Math.floor(S.dayMarkEarned);
   if(!S.setupDone){ showSetup(); }
   else{
     if(!S.segStart) S.segStart = Date.now();
