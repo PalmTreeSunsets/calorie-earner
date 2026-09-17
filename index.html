@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  CALORIE EARNER  v1.25
+  CALORIE EARNER  v1.26
 
   Disclaimer: this app is for the personal use of the author. Other use is not
   allowed. It is a work in progress, it has not been reviewed for general use,
@@ -278,7 +278,7 @@ details[open] summary::before{content:"\2212"}
   </div>
 
   <button id="startBtn">Start earning</button>
-  <p class="note" id="suVer">Version 1.25</p>
+  <p class="note" id="suVer">Version 1.26</p>
 </div>
 
 <!-- ============ SCREEN 2: THE METER ============ -->
@@ -358,7 +358,7 @@ details[open] summary::before{content:"\2212"}
     <button id="clear" class="danger">Reset app</button>
     <p class="note">Throws away your balance. Clears the log. Resets the app back to the startup
       screen. This can't be undone.</p>
-    <p class="note" id="verLine">Version 1.25</p>
+    <p class="note" id="verLine">Version 1.26</p>
   </details>
 
 </div>
@@ -376,7 +376,7 @@ var DAY   = 86400000;
    midnight, which for most people happens while they're asleep. */
 var KEEP_DAYS = 2;
 
-var APP_VERSION = "1.25";
+var APP_VERSION = "1.26";
 var HOLD_RESET_MS = 3000;   /* hold the armed reset button this long */
 var ARM_ROLLOVER  = 350;    /* a press held past this rolls straight into the hold */
 var HOLD_DEL_MS   = 1500;   /* hold a log entry's x this long */
@@ -1040,6 +1040,20 @@ document.getElementById("save").addEventListener("click", function(){
     toast("The lowest allowed value is " + MIN_DAILY.toLocaleString() + ".");
     return;
   }
+  /* A save that changes nothing must change nothing. applyRate() reanchors
+     unconditionally, and a reanchor freezes progress mid-calorie -- which
+     shifts the tick grid off midnight permanently, so the readouts and the
+     odometer stop stepping in the same instant. Re-saving the number already
+     stored used to do that with no visible cause at all.
+
+     fillSettings() still runs, so a field left reading "01600" or "1600 "
+     normalises the way it would have. Same toast either way: from the user's
+     side the setting is saved, because it is.
+
+     This closes the accidental route only. Genuinely changing the rate still
+     reanchors and still breaks phase -- that is §2b working, and the endpoint
+     zero it can produce is accepted. See HANDOVER.md. */
+  if(t === S.dailyTotal){ fillSettings(); toast("Saved"); return; }
   applyRate(t); toast("Saved");
 });
 
